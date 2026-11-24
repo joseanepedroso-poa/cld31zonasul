@@ -1,0 +1,18 @@
+Clube de Leitura d’Elas · Grupo 31 — versão 1.6
+
+Novidade: fotos das integrantes em avatar circular ao lado do nome. Capa do livro e status mantidos.
+Sem foto: iniciais. Somente Admin pode adicionar, trocar e remover fotos.
+
+PUBLICAÇÃO
+1. No Supabase > SQL Editor, execute migration_v16.sql uma vez.
+2. No GitHub, faça upload de index.html, app.js e style.css, substituindo os existentes.
+3. Não substitua config.js e não altere logo.png.
+4. Teste uma foto com o Admin e confirme a visualização sem login no celular.
+
+PRIVACIDADE
+As fotos são publicadas num bucket PÚBLICO do Supabase, acessíveis a visitantes do site.
+Publique somente fotografias cujo uso público foi autorizado pelas integrantes.
+Tamanho máximo 4 MB; formatos JPG, PNG e WebP.
+
+Não foi necessário alterar os dados já cadastrados. As políticas RLS existentes continuam
+protegendo os cadastros: somente usuários na tabela admins podem modificar registros.

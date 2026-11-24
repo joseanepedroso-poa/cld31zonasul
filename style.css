@@ -58,3 +58,77 @@
  .cover-queue-item{flex-direction:column;align-items:stretch}
 }
 [hidden]{display:none!important}
+
+/* v1.4 — leitura do clube */
+.read-status,.reading-status{display:inline-flex;align-items:center;gap:4px;width:fit-content;font-size:.74rem;font-weight:700;margin-top:5px;padding:4px 9px;border-radius:30px}
+.read-status{color:#246345;background:#eaf5eb}
+.reading-status{color:#864f16;background:#fff0d6}
+.book-read-toggle{flex-direction:row!important;align-items:center;gap:8px;font-size:.88rem}
+.book-read-toggle input{width:18px;height:18px;accent-color:#965e76}
+
+/* v1.5 — check-in rápido, sem livros nem caixas pequenas */
+.attendance-panel{padding:18px}
+.attendance-heading{display:flex;justify-content:space-between;align-items:start;gap:12px}
+.attendance-heading h3{margin:0 0 5px}
+.attendance-heading p{margin:0 0 12px}
+.attendance-count{background:#f8edf1;border-radius:13px;padding:7px 14px;text-align:center;flex-shrink:0;color:var(--dark)}
+.attendance-count strong{display:block;font-size:1.45rem;line-height:1.1}
+.attendance-count span{font-size:.7rem}
+.attendance-modes{display:grid;grid-template-columns:1fr 1fr;gap:6px;background:#f7f0f2;padding:5px;border-radius:12px}
+.attendance-modes button{border:0;border-radius:9px;background:transparent;color:var(--dark);font-size:.85rem;padding:11px 7px}
+.attendance-modes button.selected{background:#fff;box-shadow:0 1px 6px #51303d21;font-weight:700}
+.attendance-modes small{font-size:.73rem;opacity:.8}
+.attendance-tools{display:flex;align-items:center;gap:12px;margin:12px 0}
+.attendance-tools input[type=search]{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:9px;font:inherit;background:#fff}
+.attendance-filter{display:flex;flex-direction:row;align-items:center;gap:7px;white-space:nowrap;font-size:.78rem;margin:0}
+.attendance-filter input{width:17px;height:17px;accent-color:var(--wine)}
+.attendance-summary{font-size:.78rem;color:var(--sub);margin-bottom:10px}
+.attendance-rows{display:grid;gap:7px}
+.attendance-person{width:100%;display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:56px;text-align:left;background:#fff;border:1px solid var(--line);border-radius:11px;padding:11px 14px;color:var(--dark)}
+.attendance-person:active{transform:scale(.995)}
+.attendance-person.marked{background:#eaf5ee;border-color:#b8dcc7;color:#245f43}
+.attendance-person-name{font-size:.94rem;font-weight:650;line-height:1.35}
+.attendance-person-status{font-size:.76rem;white-space:nowrap;color:var(--sub);font-weight:650}
+.attendance-person.marked .attendance-person-status{color:#276847}
+.attendance-person:disabled{opacity:.65}
+@media(max-width:650px){
+ .attendance-panel{padding:12px}
+ .attendance-heading h3{font-size:1.06rem}
+ .attendance-heading p{font-size:.78rem}
+ .attendance-tools{gap:8px}
+ .attendance-filter{font-size:.73rem}
+ .attendance-person{min-height:59px;padding:12px}
+}
+
+/* v1.6 — integrantes com retrato, estante e indicação compacta */
+.member-card{display:flex;flex-direction:column;align-items:stretch;padding:15px 16px;gap:12px;box-shadow:0 3px 15px #51303d08}
+.member-main{display:flex;flex-direction:row;align-items:flex-start;gap:14px;min-width:0;width:100%}
+.member-avatar{width:68px;height:68px;flex:0 0 68px;display:grid;place-items:center;border-radius:50%;overflow:hidden;border:3px solid #f5e7ed;background:linear-gradient(145deg,#e5c9d4,#f7ebef);box-shadow:0 2px 8px #77506318}
+.member-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.member-initials{color:#895a70;font-size:1.24rem;font-weight:700;letter-spacing:.04em}
+.member-details{min-width:0;flex:1}
+.member-name{font-size:1.04rem;line-height:1.35;display:block;color:var(--dark)}
+.member-book{display:flex;align-items:center;gap:10px;margin-top:9px}
+.member-book-cover{width:42px;height:61px;flex:0 0 42px;border-radius:5px;overflow:hidden;background:#f7eef1;display:flex;align-items:center;justify-content:center;border:1px solid #ebdde1}
+.member-book-cover .book-cover{width:100%;height:100%;object-fit:contain}
+.member-book-cover .cover-placeholder{font-size:1.2rem}
+.member-book-details{display:flex;flex-direction:column;align-items:flex-start;min-width:0;line-height:1.35;gap:2px}
+.member-book-title{font-size:.86rem;color:var(--wine);font-weight:600}
+.member-book-author{font-size:.76rem;color:var(--sub)}
+.member-book-details .read-status,.member-book-details .reading-status{margin-top:3px;font-size:.69rem;padding:3px 8px}
+.member-empty{color:var(--sub);font-size:.79rem;margin-top:6px;font-style:italic}
+.member-activity{font-size:.72rem;color:var(--sub);margin-top:5px}
+.member-actions{display:flex;flex-wrap:wrap;gap:6px;padding-left:82px}
+.member-actions button{font-size:.73rem;padding:7px 10px;white-space:nowrap}
+@media(max-width:650px){
+ .member-card{padding:12px;gap:8px}
+ .member-main{gap:11px}
+ .member-avatar{width:54px;height:54px;flex-basis:54px;border-width:2px}
+ .member-initials{font-size:1rem}
+ .member-name{font-size:.96rem}
+ .member-book{margin-top:7px;gap:8px}
+ .member-book-cover{width:37px;height:54px;flex-basis:37px}
+ .member-book-title{font-size:.82rem}
+ .member-actions{padding-left:0}
+ .member-actions button{font-size:.7rem;padding:7px 9px}
+}

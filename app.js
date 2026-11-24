@@ -4,6 +4,8 @@ const configured=!!(cfg.supabaseUrl&&cfg.supabasePublishableKey&&window.supabase
 const db=configured?window.supabase.createClient(cfg.supabaseUrl,cfg.supabasePublishableKey):null;
 let admin=false,participants=[],books=[],meetings=[],attendance=[],draws=[],currentMeeting=null,rolling=false;
 let coverBookId=null,coverBusy=false,coverOptions=[];
+let attendanceMode='checkin', attendanceSearch='', attendanceOnlyConfirmed=false, attendanceSaving=false;
+let photoTargetId=null,photoSaving=false;
 const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=x=>x?new Date(x).toLocaleString('pt-BR',{dateStyle:'medium',timeStyle:'short'}):'Data a definir';
 function notify(s,error=false){const el=$('message');el.textContent=s;el.className='notice'+(error?' error':'');el.hidden=false;window.scrollTo({top:0,behavior:'smooth'});}
@@ -31,6 +33,22 @@ function renderMeetings(){
  if(meetings.some(m=>m.id===selectedMeeting))$('drawMeeting').value=selectedMeeting;
  else if(featured)$('drawMeeting').value=featured.id;
 }
+function featuredMeeting(){
+ const future=meetings.filter(isUpcoming).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
+ const drafts=meetings.filter(m=>!m.starts_at).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+ return future[0]||drafts[0]||null;
+}
+function readingBookId(){
+ const m=featuredMeeting();if(!m)return null;
+ const title=normalized(m.title).replace(/^(a|o) /,'');
+ if(!title||title==='livro a definir')return null;
+ return books.find(b=>normalized(b.title).replace(/^(a|o) /,'')===title)?.id||null;
+}
+function bookStatus(b){
+ if(!b)return '';
+ if(b.id===readingBookId())return '<span class="reading-status" aria-label="Livro em leitura pelo clube">◉ Em leitura</span>';
+ return b.read_by_club?'<span class="read-status">✓ Lido pelo clube</span>':'';
+}
 function bookForParticipant(p){return books.find(b=>b.id===p?.suggested_book_id)}
 function coverUrl(book){
  const src=book?.cover_url;
@@ -39,25 +57,110 @@ function coverUrl(book){
 }
 function bookCover(book){const url=coverUrl(book);return url?`<img class="book-cover" src="${safe(url)}" alt="Capa de ${safe(book.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="cover-placeholder" hidden aria-hidden="true">📖</span>`:'<span class="cover-placeholder" aria-hidden="true">📖</span>'}
 
+function initialsFor(name){return String(name||'?').trim().split(/\s+/).slice(0,2).map(n=>n[0]?.toLocaleUpperCase('pt-BR')||'').join('')||'?'}
+function photoUrl(person){
+ const src=person?.photo_url;
+ if(!src)return '';
+ try{let u=new URL(src);return u.protocol==='https:'?u.href:''}catch{return ''}
+}
+function participantAvatar(p){const src=photoUrl(p);return `<div class="member-avatar">${src?`<img loading="lazy" src="${safe(src)}" alt="Foto de ${safe(p.name)}" referrerpolicy="no-referrer" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="member-initials" hidden aria-hidden="true">${safe(initialsFor(p.name))}</span>`:`<span class="member-initials" aria-hidden="true">${safe(initialsFor(p.name))}</span>`}</div>`}
 function renderParticipants(){
  const visible=admin?participants:participants.filter(p=>p.active);
  $('participantList').innerHTML=visible.length?visible.map(p=>{
    const b=bookForParticipant(p);
-   return `<div class="item participant-item"><div class="participant-main cover-participant">
-    <div class="participant-cover">${bookCover(b)}</div>
-    <div class="participant-text"><strong>${safe(p.name)}</strong>
-    <div class="participant-book">${b?`<span>${safe(b.title)}</span>`:'<span class="no-book">Sem indicação cadastrada</span>'}</div>
-    ${b?.author?`<div class="participant-author">${safe(b.author)}</div>`:''}
-    ${admin?`<div class="small">${p.active?'Ativa':'Inativa'}</div>`:''}</div></div>
-    ${admin?`<div class="right"><button class="outline" data-edit-participant="${safe(p.id)}">Editar</button>${b?`<button class="quiet" data-cover-book="${safe(b.id)}">Capa</button>`:''}<button class="quiet" data-active="${safe(p.id)}">${p.active?'Desativar':'Reativar'}</button><button class="danger" data-delete-participant="${safe(p.id)}" aria-label="Excluir ${safe(p.name)}">Excluir</button></div>`:''}</div>`
+   return `<div class="item participant-item member-card"><div class="participant-main member-main">
+    ${participantAvatar(p)}
+    <div class="member-details">
+      <strong class="member-name">${safe(p.name)}</strong>
+      ${b?`<div class="member-book"><div class="member-book-cover">${bookCover(b)}</div><div class="member-book-details"><span class="member-book-title">${safe(b.title)}</span>${b.author?`<span class="member-book-author">${safe(b.author)}</span>`:''}${bookStatus(b)}</div></div>`:'<div class="member-empty">Livro ainda não indicado</div>'}
+      ${admin?`<div class="member-activity">${p.active?'Ativa':'Inativa'}</div>`:''}
+    </div>
+   </div>
+   ${admin?`<div class="right member-actions"><button class="outline" data-edit-participant="${safe(p.id)}">Editar</button><button class="quiet" data-photo-person="${safe(p.id)}">${photoUrl(p)?'Trocar foto':'Adicionar foto'}</button>${photoUrl(p)?`<button class="quiet" data-remove-photo="${safe(p.id)}">Remover foto</button>`:''}${b?`<button class="quiet" data-cover-book="${safe(b.id)}">Capa</button>`:''}<button class="quiet" data-active="${safe(p.id)}">${p.active?'Desativar':'Reativar'}</button><button class="danger" data-delete-participant="${safe(p.id)}" aria-label="Excluir ${safe(p.name)}">Excluir</button></div>`:''}</div>`
  }).join(''):'<div class="empty">Nenhuma integrante cadastrada.</div>';
  if(admin&&!$('coverManager').hidden)renderCoverQueue();
 }
 
-function participantEditor(p){if(!admin)return;$('participantEditor').hidden=false;$('participantId').value=p?.id||'';$('participantName').value=p?.name||'';const b=bookForParticipant(p);$('participantBook').value=b?.title||'';$('participantAuthor').value=b?.author||'';$('participantFormHeading').textContent=p?'Editar integrante e indicação':'Cadastrar integrante e livro';$('participantEditor').scrollIntoView({behavior:'smooth',block:'start'});}
+function photoObjectPath(url){
+ if(!url||!cfg.supabaseUrl)return null;
+ const prefix=cfg.supabaseUrl.replace(/\/$/,'')+'/storage/v1/object/public/participant-photos/';
+ return url.startsWith(prefix)?decodeURIComponent(url.slice(prefix.length)):null;
+}
+async function removeStoredPhoto(url){
+ const path=photoObjectPath(url);
+ if(path){const {error}=await db.storage.from('participant-photos').remove([path]);if(error)console.warn('Foto anterior não removida:',error.message)}
+}
+async function setParticipantPhoto(id,file){
+ if(!admin||photoSaving) return;
+ const p=participants.find(x=>x.id===id);
+ if(!p)throw Error('Integrante não encontrada.');
+ if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw Error('Use uma foto JPG, PNG ou WebP.');
+ if(file.size>4*1024*1024)throw Error('A foto precisa ter até 4 MB.');
+ photoSaving=true;
+ const extension=file.type==='image/png'?'png':file.type==='image/webp'?'webp':'jpg';
+ const objectPath=`${id}/${crypto.randomUUID()}.${extension}`;
+ try{
+  await query(db.storage.from('participant-photos').upload(objectPath,file,{contentType:file.type,upsert:false}));
+  const url=db.storage.from('participant-photos').getPublicUrl(objectPath).data.publicUrl;
+  try{await query(db.from('participants').update({photo_url:url}).eq('id',id))}
+  catch(err){await db.storage.from('participant-photos').remove([objectPath]);throw err}
+  if(p.photo_url)await removeStoredPhoto(p.photo_url);
+  await load();notify(`Foto de ${p.name} salva!`);
+ }finally{photoSaving=false}
+}
+async function clearParticipantPhoto(id){
+ if(!admin||photoSaving)return;
+ const p=participants.find(x=>x.id===id);
+ if(!p?.photo_url)return;
+ if(!confirm(`Remover a foto de ${p.name}? O avatar voltará a mostrar as iniciais.`))return;
+ photoSaving=true;
+ try{await query(db.from('participants').update({photo_url:null}).eq('id',id));await removeStoredPhoto(p.photo_url);await load();notify('Foto removida.')}finally{photoSaving=false}
+}
+function participantEditor(p){if(!admin)return;$('participantEditor').hidden=false;$('participantId').value=p?.id||'';$('participantName').value=p?.name||'';const b=bookForParticipant(p);$('participantBook').value=b?.title||'';$('participantAuthor').value=b?.author||'';$('participantRead').checked=!!b?.read_by_club;$('participantReadWrap').hidden=!b;$('participantFormHeading').textContent=p?'Editar integrante e indicação':'Cadastrar integrante e livro';$('participantEditor').scrollIntoView({behavior:'smooth',block:'start'});}
 function renderDetail(id){const m=meetings.find(x=>x.id===id);if(!m)return;currentMeeting=id;const a=attendance.filter(x=>x.meeting_id===id);let detail=`<div class="panel"><div class="meeting-info"><div>${m.card_url?`<img class="meeting-banner" src="${safe(m.card_url)}" alt="Card do encontro">`:'<div class="placeholder">Encontro do Clube</div>'}</div><div><div class="eyebrow">NOSSO ENCONTRO</div><h2>${safe(m.title)}</h2><p>${safe(fmt(m.starts_at))}</p><p><strong>Local:</strong> ${safe(m.place||'A definir')}</p>${hostsDetail(m)}<p><strong>Confirmadas:</strong> ${a.filter(x=>x.confirmed).length} · <strong>Presentes:</strong> ${a.filter(x=>x.checked_in).length}</p>${admin?`<button class="outline" data-edit-meeting="${safe(id)}">Editar encontro</button>`:''}</div></div></div>`;
-if(admin){detail+=`<div class="panel"><h3>Confirmações e check-in</h3><p class="muted">Marque a confirmação antes do encontro. No dia, marque quem compareceu O livro indicado já vem do cadastro de cada integrante.</p><div class="rows">${participants.filter(p=>p.active||a.some(x=>x.participant_id===p.id)).map(p=>{let row=a.find(x=>x.participant_id===p.id);let book=books.find(b=>b.id===(row?.suggested_book_id||p.suggested_book_id));return `<div class="item"><strong>${safe(p.name)}</strong><div class="right"><label><input data-flag="confirmed" data-person="${safe(p.id)}" type="checkbox" ${row?.confirmed?'checked':''}> Confirmou</label><label><input data-flag="checked_in" data-person="${safe(p.id)}" type="checkbox" ${row?.checked_in?'checked':''}> Presente</label><span class="small">${book?safe(book.title):'Sem livro indicado · edite a integrante'}</span></div></div>`}).join('')}</div></div>`}else{detail+=`<div class="panel"><h3>Confirmadas</h3><div class="rows">${a.filter(x=>x.confirmed).map(x=>{let p=participants.find(p=>p.id===x.participant_id);return p?`<div class="item"><strong>${safe(p.name)}</strong><span class="badge ${x.checked_in?'yes':''}">${x.checked_in?'Presente':'Confirmada'}</span></div>`:''}).join('')||'<p class="muted">Ainda sem confirmações.</p>'}</div></div>`;}
-$('meetingDetail').innerHTML=detail;$('meetingDetail').hidden=false;}
+if(admin){
+ const registered=participants.filter(p=>p.active||a.some(x=>x.participant_id===p.id));
+ const present=a.filter(x=>x.checked_in).length, confirmed=a.filter(x=>x.confirmed).length;
+ detail+=`<div class="panel attendance-panel">
+  <div class="attendance-heading"><div><h3>Presença no encontro</h3><p class="muted">Toque no nome para marcar ou desfazer o check-in.</p></div>
+  <div class="attendance-count"><strong>${present}</strong><span>presentes</span></div></div>
+  <div class="attendance-modes" role="group" aria-label="Etapa de presença">
+   <button type="button" class="${attendanceMode==='checkin'?'selected':''}" data-attendance-mode="checkin">Check-in</button>
+   <button type="button" class="${attendanceMode==='confirmed'?'selected':''}" data-attendance-mode="confirmed">Confirmações <small>${confirmed}</small></button>
+  </div>
+  <div class="attendance-tools">
+   <input id="attendanceSearch" type="search" placeholder="Buscar integrante..." aria-label="Buscar integrante" value="${safe(attendanceSearch)}">
+   ${attendanceMode==='checkin'?`<label class="attendance-filter"><input id="attendanceOnlyConfirmed" type="checkbox" ${attendanceOnlyConfirmed?'checked':''}> Só confirmadas</label>`:''}
+  </div>
+  <div class="attendance-summary">${confirmed} confirmadas · ${present} presentes · ${registered.length} integrantes</div>
+  <div id="attendanceRows" class="attendance-rows"></div>
+ </div>`;
+}else{detail+=`<div class="panel"><h3>Confirmadas</h3><div class="rows">${a.filter(x=>x.confirmed).map(x=>{let p=participants.find(p=>p.id===x.participant_id);return p?`<div class="item"><strong>${safe(p.name)}</strong><span class="badge ${x.checked_in?'yes':''}">${x.checked_in?'Presente':'Confirmada'}</span></div>`:''}).join('')||'<p class="muted">Ainda sem confirmações.</p>'}</div></div>`;}
+$('meetingDetail').innerHTML=detail;$('meetingDetail').hidden=false;if(admin)renderAttendanceRows();}
+function renderAttendanceRows(){
+ const root=$('attendanceRows');if(!root||!admin||!currentMeeting)return;
+ const rows=attendance.filter(a=>a.meeting_id===currentMeeting);
+ const queryText=normalized(attendanceSearch);
+ let people=participants.filter(p=>p.active||rows.some(r=>r.participant_id===p.id));
+ if(queryText)people=people.filter(p=>normalized(p.name).includes(queryText));
+ if(attendanceMode==='checkin'&&attendanceOnlyConfirmed)people=people.filter(p=>rows.some(r=>r.participant_id===p.id&&r.confirmed));
+ people.sort((p,q)=>{
+  if(attendanceMode==='checkin'){
+   const a=rows.find(r=>r.participant_id===p.id),b=rows.find(r=>r.participant_id===q.id);
+   const priority=x=>x?.checked_in?0:x?.confirmed?1:2;
+   if(priority(a)!==priority(b))return priority(a)-priority(b);
+  }
+  return p.name.localeCompare(q.name,'pt-BR');
+ });
+ root.innerHTML=people.length?people.map(p=>{
+  const row=rows.find(r=>r.participant_id===p.id);
+  const flagged=attendanceMode==='checkin'?!!row?.checked_in:!!row?.confirmed;
+  return `<button type="button" class="attendance-person ${flagged?'marked':''}" data-attendance-person="${safe(p.id)}" aria-pressed="${flagged}" ${attendanceSaving?'disabled':''}>
+   <span class="attendance-person-name">${safe(p.name)}</span>
+   <span class="attendance-person-status">${flagged?'✓ '+(attendanceMode==='checkin'?'Presente':'Confirmada'):attendanceMode==='checkin'?'Marcar presença':'Confirmar'}</span>
+  </button>`;
+ }).join(''):'<p class="muted">Nenhuma integrante encontrada.</p>';
+}
 function renderDraws(){
  const mid=$('drawMeeting').value||meetings[0]?.id;
  const d=draws.filter(x=>x.meeting_id===mid);
@@ -208,16 +311,31 @@ async function uploadCover(){
  const url=db.storage.from('book-covers').getPublicUrl(path).data.publicUrl;
  await saveCover(url);
 }
+document.addEventListener('click',async e=>{
+ const photoButton=e.target.closest('[data-photo-person]');
+ if(photoButton&&admin&&!photoSaving){photoTargetId=photoButton.dataset.photoPerson;const el=$('participantPhotoInput');el.value='';el.click();return}
+ const removeButton=e.target.closest('[data-remove-photo]');
+ if(removeButton&&admin){try{await clearParticipantPhoto(removeButton.dataset.removePhoto)}catch(err){notify('Erro ao remover foto: '+err.message,true)}}
+});
+document.addEventListener('change',async e=>{
+ if(e.target.id!=='participantPhotoInput'||!photoTargetId||!admin)return;
+ const file=e.target.files?.[0];const personId=photoTargetId;photoTargetId=null;
+ if(!file)return;
+ try{notify('Enviando foto...');await setParticipantPhoto(personId,file)}catch(err){notify('Não foi possível salvar a foto: '+err.message,true)}
+ finally{e.target.value=''}
+});
 async function initial(){const logo=$('logo');logo.onerror=()=>{logo.hidden=true};$('setup').hidden=configured;document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));$('loginToggle').onclick=async()=>{if(admin){await db.auth.signOut();admin=false;$('authPanel').hidden=true;render()}else{$('authPanel').hidden=!$('authPanel').hidden;$('authPanel').scrollIntoView({behavior:'smooth'})}};$('logout').onclick=async()=>{await db.auth.signOut();admin=false;render()};$('loginForm').onsubmit=async e=>{e.preventDefault();if(!db)return notify('Configure o Supabase primeiro.',true);try{await query(db.auth.signInWithPassword({email:$('email').value,password:$('password').value}));await checkAdmin();$('authPanel').hidden=admin;if(!admin)notify('A conta existe, mas não está autorizada como admin.',true);}catch(err){notify('Não foi possível entrar: '+err.message,true)}};
 $('openCoverManager').onclick=showCoverManager;
  $('closeCoverManager').onclick=()=>{$('coverManager').hidden=true;coverBookId=null};
  $('cancelCover').onclick=()=>{coverBookId=null;$('coverEditor').hidden=true;renderCoverQueue()};
  $('uploadCover').onclick=async()=>{if(coverBusy)return;try{$('uploadCover').disabled=true;await uploadCover()}catch(err){$('coverFeedback').textContent=err.message}finally{$('uploadCover').disabled=false}};
+ $('participantBook').addEventListener('input',()=>{$('participantReadWrap').hidden=!$('participantBook').value.trim()});
  $('newParticipant').onclick=()=>participantEditor(null);$('cancelParticipant').onclick=()=>$('participantEditor').hidden=true;$('newMeeting').onclick=()=>meetingEditor(null);$('cancelMeeting').onclick=()=>$('meetingFormPanel').hidden=true;
 $('meetingForm').onsubmit=async e=>{e.preventDefault();try{let old=meetings.find(m=>m.id===$('meetingId').value);let card_url=old?.card_url||'';let file=$('meetingImage').files[0];if(file){if(file.size>5242880)throw Error('O card deve ter até 5 MB.');const ext=file.name.split('.').pop().toLowerCase();const path=`${crypto.randomUUID()}.${ext}`;await query(db.storage.from('meeting-cards').upload(path,file,{contentType:file.type}));card_url=db.storage.from('meeting-cards').getPublicUrl(path).data.publicUrl}const row={title:$('meetingTitle').value.trim(),starts_at:$('meetingDate').value?new Date($('meetingDate').value).toISOString():null,place:$('meetingPlace').value.trim(),host:$('meetingHost').value.trim(),co_host:$('meetingCoHost').value.trim()||null,card_url};if(row.host&&row.co_host&&row.host===row.co_host)throw Error('Escolha duas integrantes diferentes para anfitriãs.');if(old)await query(db.from('meetings').update(row).eq('id',old.id));else await query(db.from('meetings').insert(row));$('meetingFormPanel').hidden=true;await load();notify('Encontro salvo!')}catch(err){notify(err.message,true)}};
-$('participantForm').onsubmit=async e=>{e.preventDefault();if(!admin)return;const btn=$('saveParticipant');btn.disabled=true;try{const id=$('participantId').value;const name=$('participantName').value.trim(),title=$('participantBook').value.trim(),author=$('participantAuthor').value.trim();if(!name)throw Error('Preencha o nome da integrante.');if(author&&!title)throw Error('Informe o título do livro ou deixe também a autoria em branco.');const old=participants.find(p=>p.id===id);const oldBook=bookForParticipant(old);let bookId=oldBook?.id||null;let createdBookId=null;
+$('participantForm').onsubmit=async e=>{e.preventDefault();if(!admin)return;const btn=$('saveParticipant');btn.disabled=true;try{const id=$('participantId').value;const name=$('participantName').value.trim(),title=$('participantBook').value.trim(),author=$('participantAuthor').value.trim();if(!name)throw Error('Preencha o nome da integrante.');if(author&&!title)throw Error('Informe o título do livro ou deixe também a autoria em branco.');const readByClub=$('participantRead').checked;const old=participants.find(p=>p.id===id);const oldBook=bookForParticipant(old);let bookId=oldBook?.id||null;let createdBookId=null;
 if(!title){bookId=null;}else if(!oldBook||oldBook.title!==title||oldBook.author!==author){const existing=books.find(b=>b.title.toLocaleLowerCase('pt-BR')===title.toLocaleLowerCase('pt-BR')&&b.author.toLocaleLowerCase('pt-BR')===author.toLocaleLowerCase('pt-BR'));if(existing){bookId=existing.id;}else{const result=await query(db.from('books').insert({title,author}).select('id').single());bookId=result.id;createdBookId=bookId;}}
 try{if(old){await query(db.from('participants').update({name,suggested_book_id:bookId}).eq('id',id))}else{await query(db.from('participants').insert({name,suggested_book_id:bookId}))}}catch(err){if(createdBookId)await db.from('books').delete().eq('id',createdBookId);throw err;}
+if(bookId&&oldBook?.id===bookId){await query(db.from('books').update({read_by_club:readByClub}).eq('id',bookId));}
 if(old&&bookId){await syncPendingBookForAcceptedDraw(old.id,bookId);}
 $('participantForm').reset();$('participantId').value='';$('participantEditor').hidden=true;await load();notify('Cadastro da integrante salvo!');}catch(err){notify(err.message,true)}finally{btn.disabled=false}};
 async function deleteParticipant(id){
@@ -242,6 +360,28 @@ async function deleteParticipant(id){
   await load();
   notify(`${p.name} foi excluída do cadastro.`);
 }
+document.body.addEventListener('click',async e=>{
+ const mode=e.target.closest('[data-attendance-mode]');
+ if(mode&&admin){attendanceMode=mode.dataset.attendanceMode;renderDetail(currentMeeting);return}
+ const person=e.target.closest('[data-attendance-person]');
+ if(!person||!admin||attendanceSaving)return;
+ const pid=person.dataset.attendancePerson;
+ const old=attendance.find(x=>x.meeting_id===currentMeeting&&x.participant_id===pid);
+ const field=attendanceMode==='checkin'?'checked_in':'confirmed';
+ attendanceSaving=true;person.disabled=true;
+ try{
+  await saveAttendance(pid,{[field]:!old?.[field]});
+ }catch(err){notify(err.message,true);await load()}
+ finally{attendanceSaving=false;renderAttendanceRows()}
+});
+document.body.addEventListener('input',e=>{
+ if(e.target.id!=='attendanceSearch')return;
+ attendanceSearch=e.target.value;renderAttendanceRows();
+ const el=$('attendanceSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}
+});
+document.body.addEventListener('change',e=>{
+ if(e.target.id==='attendanceOnlyConfirmed'){attendanceOnlyConfirmed=e.target.checked;renderAttendanceRows()}
+});
 document.body.addEventListener('click',async e=>{let t=e.target.closest('[data-open],[data-edit-meeting],[data-active],[data-edit-participant],[data-delete-participant],[data-cover-book],[data-choose-cover]');if(!t)return;try{
  if(t.dataset.coverBook){await openCoverSearch(t.dataset.coverBook);return}
  if(t.dataset.chooseCover!==undefined){if(coverBusy)return;const candidate=coverOptions[Number(t.dataset.chooseCover)];if(candidate){await saveCover(candidate.url)}return}
