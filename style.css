@@ -253,3 +253,25 @@ button.member-avatar-button > .member-initials {line-height:normal}
 .draw-historical-note{border-radius:12px;padding:14px;background:#f5ebef;border:1px solid #e7d8df;color:var(--wine);text-align:center;margin:15px 0;font-size:.88rem;font-weight:600}
 #drawDisplay[hidden],#drawHistoricalNote[hidden],#coverManager[hidden],#participantCoverTools[hidden]{display:none!important}
 @media(max-width:650px){.participant-cover-preview{width:54px;height:82px;flex-basis:54px}.cover-tool-body{gap:10px}.cover-tool-actions button{font-size:.77rem}}
+
+/* v2.1 - sorteio com fotos, critérios e celebração */
+.draw-display{position:relative;overflow:hidden;isolation:isolate;min-height:260px}
+#rollingPhoto{margin:7px auto;display:flex;justify-content:center;align-items:center}
+.draw-photo{width:118px;height:118px;border-radius:50%;overflow:hidden;display:flex;align-items:center;justify-content:center;border:4px solid #ffffffb8;background:#f6e5ed;box-shadow:0 7px 22px #38162930;color:#81566c}
+.draw-photo img{display:block;width:100%;height:100%;object-fit:cover;object-position:center}
+.draw-photo-initials{font-size:2rem;font-weight:800}
+.draw-photo-initials[hidden]{display:none}
+.draw-display.drawing .draw-photo{width:142px;height:142px}
+.draw-display.drawing #rollingName,.draw-display.drawing #rollingBook,.draw-display.drawing .eyebrow{display:none}
+.draw-display.drawing #rollingPhoto{margin:auto}
+.draw-display #rollingName{font-size:clamp(1.45rem,4vw,2.4rem);margin:7px 0}
+.draw-display[hidden]{display:none!important}
+.draw-excluded{border-radius:11px;background:#f8eff2;border:1px solid #eddce3;padding:12px 14px;font-size:.8rem;color:#765360;margin:8px 0 15px}
+.draw-excluded strong{display:block;margin-bottom:4px}
+.draw-excluded[hidden]{display:none}
+#drawCelebration{pointer-events:none;position:absolute;inset:0;overflow:hidden;z-index:2}
+.confetti{position:absolute;top:48%;left:50%;width:9px;height:13px;border-radius:2px;opacity:0;transform:translate(-50%,-50%)}
+.celebrating .confetti{animation:burst 1.35s cubic-bezier(.1,.6,.3,1) var(--delay) forwards}
+@keyframes burst{0%{opacity:0;transform:translate(-50%,-50%) rotate(var(--angle)) translateY(0) scale(.3)}12%{opacity:1}65%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) rotate(var(--angle)) translateY(calc(-1*var(--distance))) rotate(260deg) scale(.8)}}
+@media(prefers-reduced-motion:reduce){.celebrating .confetti{animation:none}.draw-display.drawing .draw-photo{transition:none}}
+@media(max-width:650px){.draw-display{min-height:240px;padding:18px 10px}.draw-photo{width:106px;height:106px}.draw-display.drawing .draw-photo{width:125px;height:125px}}
