@@ -198,3 +198,7 @@ button.member-avatar-button > .member-initials {line-height:normal}
     width:54px;height:54px;flex-basis:54px;min-width:54px;min-height:54px;border-width:2px;
   }
 }
+
+/* v1.7 — histórico vinculado, indicação de anfitriãs */
+.member-hosted{font-size:.74rem;color:var(--wine);margin-top:6px;font-weight:600}
+#meetingBook{max-width:100%;width:100%}

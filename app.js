@@ -14,9 +14,13 @@ async function load(){if(!db)return;try{[participants,books,meetings,attendance,
 function switchTab(t){document.querySelectorAll('.tab').forEach(el=>el.hidden=el.id!==`tab-${t}`);document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));}
 function render(){if(!admin&&$('coverManager')){$('coverManager').hidden=true;coverBookId=null;}document.querySelectorAll('.admin-only').forEach(el=>{if(!['meetingFormPanel','participantEditor','authPanel','coverManager'].includes(el.id))el.hidden=!admin});$('loginToggle').textContent=admin?'Admin · Sair':'Entrar como admin';renderMeetings();renderParticipants();renderDraws();if(currentMeeting)renderDetail(currentMeeting);}
 function isUpcoming(m){if(!m.starts_at)return false;const end=new Date(m.starts_at);end.setHours(23,59,59,999);return end>=new Date();}
-function hostsLabel(m){return m.co_host?`${m.host||'A definir'} e ${m.co_host}`:m.host||'A definir'}
-function hostsDetail(m){return `<p><strong>Anfitriã sorteada:</strong> ${safe(m.host||'A definir')}</p>${m.co_host?`<p><strong>Anfitriã convidada:</strong> ${safe(m.co_host)}</p>`:''}`}
-function meetingCard(m,featured=false){const count=attendance.filter(a=>a.meeting_id===m.id&&a.confirmed).length;return `<article class="meeting-card ${featured?'featured':''}">${m.card_url?`<img src="${safe(m.card_url)}" alt="Card de divulgação do encontro" loading="lazy">`:'<div class="placeholder">Card do encontro em breve</div>'}<div class="content"><div class="eyebrow">${featured?'PRÓXIMA LEITURA':'ENCONTRO'}</div><h3>${safe(m.title||'Livro a definir')}</h3><div class="meta">${safe(fmt(m.starts_at))}<br>Anfitriãs: ${safe(hostsLabel(m))}<br>${safe(m.place||'Local a definir')}</div>${featured&&(!m.starts_at||!m.place||!m.card_url)?'<div class="soon">Em breve, mais informações sobre o encontro.</div>':''}<button class="outline" data-open="${safe(m.id)}">Ver detalhes${admin?` · ${count} confirmada(s)`:''}</button></div></article>`}
+function meetingBook(m){return books.find(b=>b.id===m?.book_id)||null}
+function meetingTitle(m){return meetingBook(m)?.title||m?.title||'Livro a definir'}
+function meetingBookWasRead(b){return !!b&&(!!b.read_by_club||meetings.some(m=>m.book_id===b.id&&m.starts_at&&!isUpcoming(m)))}
+function memberHosted(p){return meetings.some(m=>m.starts_at&&!isUpcoming(m)&&(m.host_participant_id===p.id||m.co_host_participant_id===p.id))}
+function hostsLabel(m){const h=participants.find(p=>p.id===m.host_participant_id)?.name||m.host||'A definir';const co=participants.find(p=>p.id===m.co_host_participant_id)?.name||m.co_host;return co?`${h} e ${co}`:h}
+function hostsDetail(m){const h=participants.find(p=>p.id===m.host_participant_id)?.name||m.host||'A definir';const co=participants.find(p=>p.id===m.co_host_participant_id)?.name||m.co_host;return `<p><strong>Anfitriã sorteada:</strong> ${safe(h)}</p>${co?`<p><strong>Anfitriã convidada:</strong> ${safe(co)}</p>`:''}`}
+function meetingCard(m,featured=false){const count=attendance.filter(a=>a.meeting_id===m.id&&a.confirmed).length;return `<article class="meeting-card ${featured?'featured':''}">${m.card_url?`<img src="${safe(m.card_url)}" alt="Card de divulgação do encontro" loading="lazy">`:'<div class="placeholder">Card do encontro em breve</div>'}<div class="content"><div class="eyebrow">${featured?'PRÓXIMA LEITURA':'ENCONTRO'}</div><h3>${safe(meetingTitle(m))}</h3><div class="meta">${safe(fmt(m.starts_at))}<br>Anfitriãs: ${safe(hostsLabel(m))}<br>${safe(m.place||'Local a definir')}</div>${featured&&(!m.starts_at||!m.place||!m.card_url)?'<div class="soon">Em breve, mais informações sobre o encontro.</div>':''}<button class="outline" data-open="${safe(m.id)}">Ver detalhes${admin?` · ${count} confirmada(s)`:''}</button></div></article>`}
 function renderMeetings(){
  const pastWasOpen=$('pastDisclosure')?.open||false;
  const selectedMeeting=$('drawMeeting').value;
@@ -29,7 +33,7 @@ function renderMeetings(){
  $('meetingCards').innerHTML=featured?meetingCard(featured,true):`<div class="empty"><strong>Próximo encontro em preparação</strong><p>Assim que o livro ou a anfitriã forem cadastrados, as informações aparecerão aqui.</p></div>`;
  $('pastMeetings').innerHTML=`<details class="archive-disclosure" id="pastDisclosure"><summary><span><strong>Encontros anteriores</strong><small>${previous.length} ${previous.length===1?'encontro registrado':'encontros registrados'}</small></span><span class="archive-chevron" aria-hidden="true">⌄</span></summary><div class="archive-body">${previous.length?`<div class="meeting-grid archive-grid">${previous.map(m=>meetingCard(m)).join('')}</div>`:'<p class="muted">Ainda não há encontros anteriores cadastrados.</p>'}</div></details>`+(planned.length||drafts.length?`<details class="archive-disclosure"><summary><span><strong>Outros encontros planejados</strong><small>${planned.length+drafts.length} ${planned.length+drafts.length===1?'encontro':'encontros'}</small></span><span class="archive-chevron" aria-hidden="true">⌄</span></summary><div class="archive-body"><div class="meeting-grid archive-grid">${[...planned,...drafts].map(m=>meetingCard(m)).join('')}</div></div></details>`:'');
  if(pastWasOpen)$('pastDisclosure').open=true;
- $('drawMeeting').innerHTML=meetings.map(m=>`<option value="${safe(m.id)}">${safe(m.title||'Livro a definir')} · ${safe(fmt(m.starts_at))}</option>`).join('');
+ $('drawMeeting').innerHTML=meetings.map(m=>`<option value="${safe(m.id)}">${safe(meetingTitle(m))} · ${safe(fmt(m.starts_at))}</option>`).join('');
  if(meetings.some(m=>m.id===selectedMeeting))$('drawMeeting').value=selectedMeeting;
  else if(featured)$('drawMeeting').value=featured.id;
 }
@@ -40,14 +44,14 @@ function featuredMeeting(){
 }
 function readingBookId(){
  const m=featuredMeeting();if(!m)return null;
- const title=normalized(m.title).replace(/^(a|o) /,'');
+ if(m.book_id)return m.book_id;const title=normalized(m.title).replace(/^(a|o) /,'');
  if(!title||title==='livro a definir')return null;
  return books.find(b=>normalized(b.title).replace(/^(a|o) /,'')===title)?.id||null;
 }
 function bookStatus(b){
  if(!b)return '';
  if(b.id===readingBookId())return '<span class="reading-status" aria-label="Livro em leitura pelo clube">◉ Em leitura</span>';
- return b.read_by_club?'<span class="read-status">✓ Lido pelo clube</span>':'';
+ return meetingBookWasRead(b)?'<span class="read-status">✓ Lido pelo clube</span>':'';
 }
 function bookForParticipant(p){return books.find(b=>b.id===p?.suggested_book_id)}
 function coverUrl(book){
@@ -73,7 +77,7 @@ function renderParticipants(){
     <div class="member-details">
       <strong class="member-name">${safe(p.name)}</strong>
       ${b?`<div class="member-book"><div class="member-book-cover">${bookCover(b)}</div><div class="member-book-details"><span class="member-book-title">${safe(b.title)}</span>${b.author?`<span class="member-book-author">${safe(b.author)}</span>`:''}${bookStatus(b)}</div></div>`:'<div class="member-empty">Livro ainda não indicado</div>'}
-      
+      ${memberHosted(p)?'<div class="member-hosted">✦ Já foi anfitriã</div>':''}
     </div>
    </div>
    ${admin?`<div class="right member-actions"><button class="outline" data-edit-participant="${safe(p.id)}">Editar</button><button class="quiet" data-photo-person="${safe(p.id)}">${photoUrl(p)?'Trocar foto':'Adicionar foto'}</button>${photoUrl(p)?`<button class="quiet" data-remove-photo="${safe(p.id)}">Remover foto</button>`:''}${b?`<button class="quiet" data-cover-book="${safe(b.id)}">Capa</button>`:''}<button class="quiet" data-active="${safe(p.id)}">${p.active?'Desativar':'Reativar'}</button><button class="danger" data-delete-participant="${safe(p.id)}" aria-label="Excluir ${safe(p.name)}">Excluir</button></div>`:''}</div>`
@@ -117,7 +121,7 @@ async function clearParticipantPhoto(id){
  try{await query(db.from('participants').update({photo_url:null}).eq('id',id));await removeStoredPhoto(p.photo_url);await load();notify('Foto removida.')}finally{photoSaving=false}
 }
 function participantEditor(p){if(!admin)return;$('participantEditor').hidden=false;$('participantId').value=p?.id||'';$('participantName').value=p?.name||'';const b=bookForParticipant(p);$('participantBook').value=b?.title||'';$('participantAuthor').value=b?.author||'';$('participantRead').checked=!!b?.read_by_club;$('participantReadWrap').hidden=!b;$('participantFormHeading').textContent=p?'Editar integrante e indicação':'Cadastrar integrante e livro';$('participantEditor').scrollIntoView({behavior:'smooth',block:'start'});}
-function renderDetail(id){const m=meetings.find(x=>x.id===id);if(!m)return;currentMeeting=id;const a=attendance.filter(x=>x.meeting_id===id);let detail=`<div class="panel"><div class="meeting-info"><div>${m.card_url?`<img class="meeting-banner" src="${safe(m.card_url)}" alt="Card do encontro">`:'<div class="placeholder">Encontro do Clube</div>'}</div><div><div class="eyebrow">NOSSO ENCONTRO</div><h2>${safe(m.title)}</h2><p>${safe(fmt(m.starts_at))}</p><p><strong>Local:</strong> ${safe(m.place||'A definir')}</p>${hostsDetail(m)}<p><strong>Confirmadas:</strong> ${a.filter(x=>x.confirmed).length} · <strong>Presentes:</strong> ${a.filter(x=>x.checked_in).length}</p>${admin?`<button class="outline" data-edit-meeting="${safe(id)}">Editar encontro</button>`:''}</div></div></div>`;
+function renderDetail(id){const m=meetings.find(x=>x.id===id);if(!m)return;currentMeeting=id;const a=attendance.filter(x=>x.meeting_id===id);let detail=`<div class="panel"><div class="meeting-info"><div>${m.card_url?`<img class="meeting-banner" src="${safe(m.card_url)}" alt="Card do encontro">`:'<div class="placeholder">Encontro do Clube</div>'}</div><div><div class="eyebrow">NOSSO ENCONTRO</div><h2>${safe(meetingTitle(m))}</h2><p>${safe(fmt(m.starts_at))}</p><p><strong>Local:</strong> ${safe(m.place||'A definir')}</p>${hostsDetail(m)}<p><strong>Confirmadas:</strong> ${a.filter(x=>x.confirmed).length} · <strong>Presentes:</strong> ${a.filter(x=>x.checked_in).length}</p>${admin?`<button class="outline" data-edit-meeting="${safe(id)}">Editar encontro</button>`:''}</div></div></div>`;
 if(admin){
  const registered=participants.filter(p=>p.active||a.some(x=>x.participant_id===p.id));
  const present=a.filter(x=>x.checked_in).length, confirmed=a.filter(x=>x.confirmed).length;
@@ -181,10 +185,16 @@ async function saveAttendance(person,changes){let m=currentMeeting;if(!m)return;
 function meetingEditor(m){
  $('meetingFormPanel').hidden=false;
  $('meetingId').value=m?.id||'';
- $('meetingTitle').value=m?.title||'';
+ const chosen=m?.book_id||books.find(b=>normalized(b.title)===normalized(m?.title||''))?.id||'';
+ const bookSelect=$('meetingBook');
+ bookSelect.innerHTML='<option value="">Livro a definir · escolher depois</option>'+books.map(b=>`<option value="${safe(b.id)}">${safe(b.title)}${b.author?' — '+safe(b.author):''}</option>`).join('');
+ bookSelect.value=chosen;
+ if(m?.title&&!chosen&&normalized(m.title)!=='livro a definir'){
+   const legacy=document.createElement('option');legacy.value='legacy';legacy.textContent=m.title+' (título antigo — selecione o livro cadastrado)';bookSelect.appendChild(legacy);bookSelect.value='legacy';
+ }
  $('meetingDate').value=m?.starts_at?new Date(new Date(m.starts_at).getTime()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16):'';
  const select=$('meetingHost');
- const savedHost=m?.host?.trim()||'';
+ const savedHost=participants.find(p=>p.id===m?.host_participant_id)?.name||m?.host?.trim()||'';
  const options=participants.filter(p=>p.active||p.name===savedHost).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
  select.innerHTML='<option value="">Selecione uma integrante</option>'+options.map(p=>`<option value="${safe(p.name)}">${safe(p.name)}</option>`).join('');
  // Preserve os nomes de anfitriãs cadastrados anteriormente que não correspondam
@@ -196,7 +206,7 @@ function meetingEditor(m){
  }
  select.value=savedHost;
  const coSelect=$('meetingCoHost');
- const savedCoHost=m?.co_host?.trim()||'';
+ const savedCoHost=participants.find(p=>p.id===m?.co_host_participant_id)?.name||m?.co_host?.trim()||'';
  const coOptions=participants.filter(p=>p.active||p.name===savedCoHost).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
  coSelect.innerHTML='<option value="">Nenhuma · escolher depois</option>'+coOptions.map(p=>`<option value="${safe(p.name)}">${safe(p.name)}</option>`).join('');
  if(savedCoHost&&!coOptions.some(p=>p.name===savedCoHost)){
@@ -245,7 +255,7 @@ async function syncPendingBookForAcceptedDraw(participantId,bookId){
   await query(db.from('draws').update({book_id:bookId}).eq('id',d.id));
   const draft=meetings.find(m=>m.source_draw_id===d.id);
   if(draft&&(!draft.title||draft.title==='Livro a definir')){
-   await query(db.from('meetings').update({title:book.title}).eq('id',draft.id));
+   await query(db.from('meetings').update({title:book.title,book_id:book.id}).eq('id',draft.id));
   }
  }
 }
@@ -331,7 +341,12 @@ $('openCoverManager').onclick=showCoverManager;
  $('uploadCover').onclick=async()=>{if(coverBusy)return;try{$('uploadCover').disabled=true;await uploadCover()}catch(err){$('coverFeedback').textContent=err.message}finally{$('uploadCover').disabled=false}};
  $('participantBook').addEventListener('input',()=>{$('participantReadWrap').hidden=!$('participantBook').value.trim()});
  $('newParticipant').onclick=()=>participantEditor(null);$('cancelParticipant').onclick=()=>$('participantEditor').hidden=true;$('newMeeting').onclick=()=>meetingEditor(null);$('cancelMeeting').onclick=()=>$('meetingFormPanel').hidden=true;
-$('meetingForm').onsubmit=async e=>{e.preventDefault();try{let old=meetings.find(m=>m.id===$('meetingId').value);let card_url=old?.card_url||'';let file=$('meetingImage').files[0];if(file){if(file.size>5242880)throw Error('O card deve ter até 5 MB.');const ext=file.name.split('.').pop().toLowerCase();const path=`${crypto.randomUUID()}.${ext}`;await query(db.storage.from('meeting-cards').upload(path,file,{contentType:file.type}));card_url=db.storage.from('meeting-cards').getPublicUrl(path).data.publicUrl}const row={title:$('meetingTitle').value.trim(),starts_at:$('meetingDate').value?new Date($('meetingDate').value).toISOString():null,place:$('meetingPlace').value.trim(),host:$('meetingHost').value.trim(),co_host:$('meetingCoHost').value.trim()||null,card_url};if(row.host&&row.co_host&&row.host===row.co_host)throw Error('Escolha duas integrantes diferentes para anfitriãs.');if(old)await query(db.from('meetings').update(row).eq('id',old.id));else await query(db.from('meetings').insert(row));$('meetingFormPanel').hidden=true;await load();notify('Encontro salvo!')}catch(err){notify(err.message,true)}};
+$('meetingForm').onsubmit=async e=>{e.preventDefault();try{let old=meetings.find(m=>m.id===$('meetingId').value);let card_url=old?.card_url||'';let file=$('meetingImage').files[0];if(file){if(file.size>5242880)throw Error('O card deve ter até 5 MB.');const ext=file.name.split('.').pop().toLowerCase();const path=`${crypto.randomUUID()}.${ext}`;await query(db.storage.from('meeting-cards').upload(path,file,{contentType:file.type}));card_url=db.storage.from('meeting-cards').getPublicUrl(path).data.publicUrl}const selectedBook=$('meetingBook').value;
+ if(selectedBook==='legacy')throw Error('Selecione o livro cadastrado para vincular este encontro.');
+ const book=books.find(b=>b.id===selectedBook);
+ const host=$('meetingHost').value.trim(), co_host=$('meetingCoHost').value.trim()||null;
+ const hostPerson=participants.find(p=>p.name===host), coHostPerson=participants.find(p=>p.name===co_host);
+ const row={title:book?.title||'Livro a definir',book_id:book?.id||null,starts_at:$('meetingDate').value?new Date($('meetingDate').value).toISOString():null,place:$('meetingPlace').value.trim(),host,co_host,host_participant_id:hostPerson?.id||null,co_host_participant_id:coHostPerson?.id||null,card_url};if(row.host&&row.co_host&&row.host===row.co_host)throw Error('Escolha duas integrantes diferentes para anfitriãs.');if(old)await query(db.from('meetings').update(row).eq('id',old.id));else await query(db.from('meetings').insert(row));$('meetingFormPanel').hidden=true;await load();notify('Encontro salvo!')}catch(err){notify(err.message,true)}};
 $('participantForm').onsubmit=async e=>{e.preventDefault();if(!admin)return;const btn=$('saveParticipant');btn.disabled=true;try{const id=$('participantId').value;const name=$('participantName').value.trim(),title=$('participantBook').value.trim(),author=$('participantAuthor').value.trim();if(!name)throw Error('Preencha o nome da integrante.');if(author&&!title)throw Error('Informe o título do livro ou deixe também a autoria em branco.');const readByClub=$('participantRead').checked;const old=participants.find(p=>p.id===id);const oldBook=bookForParticipant(old);let bookId=oldBook?.id||null;let createdBookId=null;
 if(!title){bookId=null;}else if(!oldBook||oldBook.title!==title||oldBook.author!==author){const existing=books.find(b=>b.title.toLocaleLowerCase('pt-BR')===title.toLocaleLowerCase('pt-BR')&&b.author.toLocaleLowerCase('pt-BR')===author.toLocaleLowerCase('pt-BR'));if(existing){bookId=existing.id;}else{const result=await query(db.from('books').insert({title,author}).select('id').single());bookId=result.id;createdBookId=bookId;}}
 try{if(old){await query(db.from('participants').update({name,suggested_book_id:bookId}).eq('id',id))}else{await query(db.from('participants').insert({name,suggested_book_id:bookId}))}}catch(err){if(createdBookId)await db.from('books').delete().eq('id',createdBookId);throw err;}
@@ -401,7 +416,7 @@ $('drawMeeting').onchange=renderDraws;$('drawBtn').onclick=runDraw;$('acceptBtn'
   const existing=meetings.find(m=>m.source_draw_id===d.id);
   if(!existing){
    try{
-    await query(db.from('meetings').insert({title:book?.title||'Livro a definir',host:name,co_host:null,place:'',card_url:'',starts_at:null,source_draw_id:d.id}));
+    await query(db.from('meetings').insert({title:book?.title||'Livro a definir',book_id:book?.id||null,host:name,host_participant_id:d.participant_id,co_host:null,co_host_participant_id:null,place:'',card_url:'',starts_at:null,source_draw_id:d.id}));
     draftCreated=true;
    }catch(err){draftError=err;}
   }
