@@ -12,7 +12,7 @@ function notify(s,error=false){const el=$('message');el.textContent=s;el.classNa
 async function query(p){const {data,error}=await p;if(error)throw error;return data}
 async function load(){if(!db)return;try{[participants,books,meetings,attendance,draws]=await Promise.all([query(db.from('participants').select('*').order('name')),query(db.from('books').select('*').order('title')),query(db.from('meetings').select('*').order('starts_at',{ascending:false})),query(db.from('attendance').select('*')),query(db.from('draws').select('*').order('created_at'))]);render();}catch(e){notify('Não foi possível carregar os dados: '+e.message,true)}}
 function switchTab(t){document.querySelectorAll('.tab').forEach(el=>el.hidden=el.id!==`tab-${t}`);document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));}
-function render(){if(!admin&&$('coverManager')){$('coverManager').hidden=true;coverBookId=null;}document.querySelectorAll('.admin-only').forEach(el=>{if(!['meetingFormPanel','participantEditor','authPanel','coverManager'].includes(el.id))el.hidden=!admin});$('loginToggle').textContent=admin?'Admin · Sair':'Entrar como admin';renderMeetings();renderParticipants();renderDraws();if(currentMeeting)renderDetail(currentMeeting);}
+function render(){if(!admin&&$('coverManager')){$('coverManager').hidden=true;coverBookId=null;}document.querySelectorAll('.admin-only').forEach(el=>{if(!['meetingFormPanel','participantEditor','authPanel','coverManager'].includes(el.id))el.hidden=!admin});$('loginToggle').setAttribute('aria-label',admin?'Abrir opções administrativas':'Entrar como administrador');$('loginToggle').title=admin?'Opções administrativas':'Entrar como administrador';$('logout').hidden=!admin;$('loginForm').hidden=admin;renderMeetings();renderParticipants();renderDraws();if(currentMeeting)renderDetail(currentMeeting);}
 function localDay(value){if(!value)return null;const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(value));const get=type=>parts.find(part=>part.type===type)?.value||'';return `${get('year')}-${get('month')}-${get('day')}`;}
 function isPastMeeting(m){return !!m?.starts_at&&localDay(m.starts_at)<localDay(new Date());}
 function isUpcoming(m){return !!m?.starts_at&&!isPastMeeting(m);}
@@ -74,10 +74,10 @@ function renderParticipants(){
  const visible=admin?participants:participants.filter(p=>p.active);
  $('participantList').innerHTML=visible.length?visible.map(p=>{
    const b=bookForParticipant(p);
-   return `<div class="item participant-item member-card"><div class="participant-main member-main">
+   return `<div class="item participant-item member-card ${admin&&!p.active?'member-inactive':''}"><div class="participant-main member-main">
     ${participantAvatar(p)}
     <div class="member-details">
-      <strong class="member-name">${safe(p.name)}</strong>
+      <strong class="member-name">${safe(p.name)}</strong>${admin&&!p.active?'<span class="inactive-badge">Desativada</span>':''}
       ${b?`<div class="member-book"><div class="member-book-cover">${bookCover(b)}</div><div class="member-book-details"><span class="member-book-title">${safe(b.title)}</span>${b.author?`<span class="member-book-author">${safe(b.author)}</span>`:''}${bookStatus(b)}</div></div>`:'<div class="member-empty">Livro ainda não indicado</div>'}
       ${memberHosted(p)?'<div class="member-hosted">✦ Já foi anfitriã</div>':''}
     </div>
@@ -139,7 +139,9 @@ if(admin&&isPastMeeting(m)){
   ${attendanceMode==='checkin'?`<div class="attendance-bulk"><button type="button" class="outline" data-attendance-bulk="mark">✓ Marcar todas</button><button type="button" class="quiet" data-attendance-bulk="unmark">Desmarcar todas</button></div>`:''}
   <div id="attendanceRows" class="attendance-rows"></div>
  </div>`;
-}else{detail+=`<div class="panel"><h3>Confirmadas</h3><div class="rows">${a.filter(x=>x.confirmed).map(x=>{let p=participants.find(p=>p.id===x.participant_id);return p?`<div class="item"><strong>${safe(p.name)}</strong><span class="badge ${x.checked_in?'yes':''}">${x.checked_in?'Presente':'Confirmada'}</span></div>`:''}).join('')||'<p class="muted">Ainda sem confirmações.</p>'}</div></div>`;}
+}else{const confirmedPeople=a.filter(x=>x.confirmed).map(x=>participants.find(p=>p.id===x.participant_id)).filter(Boolean);
+ const empty=isPastMeeting(m)?'<p class="muted">0 participantes</p>':'<p class="muted">Ainda sem confirmações.</p>';
+ detail+=`<div class="panel"><h3>Confirmadas</h3><div class="rows confirmed-people">${confirmedPeople.map(p=>`<div class="public-confirmed">${participantAvatar(p)}<strong>${safe(p.name)}</strong></div>`).join('')||empty}</div></div>`;}
 $('meetingDetail').innerHTML=detail;$('meetingDetail').hidden=false;if(admin)renderAttendanceRows();}
 function renderAttendanceRows(){
  const root=$('attendanceRows');if(!root||!admin||!currentMeeting||isPastMeeting(meetings.find(m=>m.id===currentMeeting)))return;
@@ -167,19 +169,30 @@ function renderAttendanceRows(){
 }
 function renderDraws(){
  const mid=$('drawMeeting').value||meetings[0]?.id;
+ const meeting=meetings.find(m=>m.id===mid);
  const d=draws.filter(x=>x.meeting_id===mid);
  const accepted=d.find(x=>x.status==='accepted');
  const last=accepted||d.at(-1);
- $('drawHistory').innerHTML=d.length?d.map(x=>{let p=participants.find(p=>p.id===x.participant_id),b=books.find(b=>b.id===x.book_id);return `<div class="item draw-history-item"><div><strong>${safe(p?.name||'Participante')}</strong><div class="small">${safe(b?.title||'Livro a indicar')}</div></div><span class="badge ${x.status==='accepted'?'yes':''}">${x.status==='accepted'?'✓ Aceitou':x.status==='skipped'?'Não disponível':'Aguardando resposta'}</span></div>`}).join(''):'<div class="empty">Ainda não houve sorteio neste encontro.</div>';
- $('rollingName').textContent=last?participants.find(p=>p.id===last.participant_id)?.name||'Quem será?':'Quem será?';
- $('rollingBook').textContent=last?(books.find(b=>b.id===last.book_id)?.title||'Livro a indicar') : '';
+ const historicWithoutDraws=!!meeting&&isPastMeeting(meeting)&&d.length===0;
+ const hostNames=[participants.find(p=>p.id===meeting?.host_participant_id)?.name||meeting?.host,participants.find(p=>p.id===meeting?.co_host_participant_id)?.name||meeting?.co_host].map(n=>String(n||'').trim()).filter(n=>n&&normalized(n)!=='a definir');
+ const historyPanel=$('drawHistoryPanel'), historyTitle=$('drawHistoryTitle');
+ historyPanel.hidden=historicWithoutDraws&&!hostNames.length;
+ historyTitle.textContent=historicWithoutDraws?'Anfitriãs do encontro':'Histórico do sorteio';
+ if(historicWithoutDraws){
+  $('drawHistory').innerHTML=hostNames.map((name,i)=>`<div class="item historic-host"><div><strong>${safe(name)}</strong><div class="small">${i===0?'Anfitriã':'Anfitriã convidada'}</div></div></div>`).join('');
+ }else if(d.length){
+  $('drawHistory').innerHTML=d.map(x=>{let p=participants.find(p=>p.id===x.participant_id),b=books.find(b=>b.id===x.book_id);return `<div class="item draw-history-item"><div><strong>${safe(p?.name||'Participante')}</strong><div class="small">${safe(b?.title||'Livro a indicar')}</div></div><span class="badge ${x.status==='accepted'?'yes':''}">${x.status==='accepted'?'✓ Aceitou':x.status==='skipped'?'Não disponível':'Aguardando resposta'}</span></div>`}).join('');
+ }else{$('drawHistory').innerHTML='<div class="empty">Sorteio ainda não realizado.</div>'}
+ $('rollingName').textContent=last?participants.find(p=>p.id===last.participant_id)?.name||'Quem será?':historicWithoutDraws?(hostNames.join(' e ')||'Encontro anterior'):'Quem será?';
+ $('rollingBook').textContent=last?(books.find(b=>b.id===last.book_id)?.title||'Livro a indicar'):historicWithoutDraws?'Anfitriã(s) cadastrada(s) para este encontro':'';
  $('drawDisplay').classList.toggle('accepted',!!accepted);
  $('drawAccepted').hidden=!accepted;
  $('drawBtn').textContent=d.length?'↻ Sortear novamente':'Iniciar sorteio';
- $('drawBtn').hidden=!admin||!!accepted;
- $('acceptBtn').hidden=!(admin&&last?.status==='pending'&&!accepted);
- $('resetDraws').hidden=!admin||!d.length;
- $('drawNote').textContent=accepted?'Resultado aceito e registrado para este encontro.':d.length?`${d.filter(x=>x.status==='skipped').length} sorteada(s) excluída(s) das próximas tentativas. Confirme quando a pessoa aceitar.`:'Participam todas as integrantes com check-in, mesmo sem livro indicado. A sorteada pode indicar o livro depois.';
+ const canDraw=admin&&!isPastMeeting(meeting);
+ $('drawBtn').hidden=!canDraw||!!accepted;
+ $('acceptBtn').hidden=!(canDraw&&last?.status==='pending'&&!accepted);
+ $('resetDraws').hidden=!canDraw||!d.length;
+ $('drawNote').textContent=historicWithoutDraws?'Informações do encontro histórico, sem sorteio registrado no site.':accepted?'Resultado aceito e registrado para este encontro.':d.length?`${d.filter(x=>x.status==='skipped').length} sorteada(s) excluída(s) das próximas tentativas. Confirme quando a pessoa aceitar.`:'Participam todas as integrantes com check-in, mesmo sem livro indicado. A sorteada pode indicar o livro depois.';
 }
 async function saveAttendance(person,changes){let m=currentMeeting;if(!m)return;if(isPastMeeting(meetings.find(x=>x.id===m)))throw Error('O check-in de encontros anteriores está encerrado.');let old=attendance.find(x=>x.meeting_id===m&&x.participant_id===person);if(changes.checked_in===true&&!old?.confirmed)throw Error('Somente participantes confirmadas podem fazer check-in.');let row={meeting_id:m,participant_id:person,confirmed:old?.confirmed||false,checked_in:old?.checked_in||false,suggested_book_id:old?.suggested_book_id||participants.find(p=>p.id===person)?.suggested_book_id||null,...changes};if(row.checked_in)row.confirmed=true;if(!row.confirmed)row.checked_in=false;await query(db.from('attendance').upsert(row,{onConflict:'meeting_id,participant_id'}));await load();}
 async function bulkCheckIn(mark){
@@ -237,6 +250,7 @@ async function runDraw(){
  if(!admin||rolling)return;
  const mid=$('drawMeeting').value;
  if(!mid)return notify('Cadastre um encontro primeiro.',true);
+ if(isPastMeeting(meetings.find(m=>m.id===mid)))return notify('Não é possível sortear em um encontro anterior.',true);
  const previous=draws.filter(d=>d.meeting_id===mid);
  if(previous.some(d=>d.status==='accepted'))return notify('Este sorteio já tem resultado confirmado. Para começar de novo, reinicie a rodada.',true);
  // Todas as presentes concorrem, mesmo que ainda não tenham livro indicado.
@@ -350,7 +364,7 @@ document.addEventListener('change',async e=>{
  try{notify('Enviando foto...');await setParticipantPhoto(personId,file)}catch(err){notify('Não foi possível salvar a foto: '+err.message,true)}
  finally{e.target.value=''}
 });
-async function initial(){const logo=$('logo');logo.onerror=()=>{logo.hidden=true};$('setup').hidden=configured;document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));$('loginToggle').onclick=async()=>{if(admin){await db.auth.signOut();admin=false;$('authPanel').hidden=true;render()}else{$('authPanel').hidden=!$('authPanel').hidden;$('authPanel').scrollIntoView({behavior:'smooth'})}};$('logout').onclick=async()=>{await db.auth.signOut();admin=false;render()};$('loginForm').onsubmit=async e=>{e.preventDefault();if(!db)return notify('Configure o Supabase primeiro.',true);try{await query(db.auth.signInWithPassword({email:$('email').value,password:$('password').value}));await checkAdmin();$('authPanel').hidden=admin;if(!admin)notify('A conta existe, mas não está autorizada como admin.',true);}catch(err){notify('Não foi possível entrar: '+err.message,true)}};
+async function initial(){const logo=$('logo');logo.onerror=()=>{logo.hidden=true};$('setup').hidden=configured;document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));$('loginToggle').onclick=()=>{$('authPanel').hidden=!$('authPanel').hidden;if(!$('authPanel').hidden)$('authPanel').scrollIntoView({behavior:'smooth'})};$('logout').onclick=async()=>{await db.auth.signOut();admin=false;render()};$('loginForm').onsubmit=async e=>{e.preventDefault();if(!db)return notify('Configure o Supabase primeiro.',true);try{await query(db.auth.signInWithPassword({email:$('email').value,password:$('password').value}));await checkAdmin();$('authPanel').hidden=admin;if(!admin)notify('A conta existe, mas não está autorizada como admin.',true);}catch(err){notify('Não foi possível entrar: '+err.message,true)}};
 $('openCoverManager').onclick=showCoverManager;
  $('closeCoverManager').onclick=()=>{$('coverManager').hidden=true;coverBookId=null};
  $('cancelCover').onclick=()=>{coverBookId=null;$('coverEditor').hidden=true;renderCoverQueue()};

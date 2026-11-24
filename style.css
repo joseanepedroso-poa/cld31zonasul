@@ -208,3 +208,27 @@ button.member-avatar-button > .member-initials {line-height:normal}
 .attendance-bulk button{min-height:40px;padding:9px 14px;font-size:.84rem}
 .archive-presence{background:#fbf6f8;border:1px solid var(--line)}
 @media(max-width:650px){.attendance-bulk{display:grid;grid-template-columns:1fr 1fr}.attendance-bulk button{padding:11px 8px}}
+
+/* v1.9 — identidade, coordenação discreta, arquivos e lista pública */
+.hero .brand small{font-size:.78rem;letter-spacing:.02em;text-transform:none;color:#faeef3;line-height:1.2;font-weight:500}
+.hero .brand h1{font-size:clamp(1.65rem,3vw,2.25rem);line-height:1.15;margin:4px 0 0;color:#fff}
+.hero .admin-gear{width:39px;height:39px;flex:0 0 39px;display:grid;place-items:center;padding:0!important;margin:0;border:1px solid #ffffff50;border-radius:50%;background:transparent;color:#fff;opacity:.84;text-decoration:none;max-width:none;cursor:pointer}
+.hero .admin-gear:hover{opacity:1;background:#ffffff20}
+.hero .admin-gear:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.member-card.member-inactive{background:#fff0f1;border-color:#e9b8bf;box-shadow:inset 3px 0 0 #ce7e8d,0 3px 12px #6b25300a}
+.member-inactive .member-name{color:#81505b}
+.inactive-badge{display:inline-block;margin:5px 0 0;padding:3px 9px;border-radius:30px;background:#f8dce1;color:#a33d52;font-size:.71rem;font-weight:700}
+.confirmed-people{gap:7px}
+.public-confirmed{display:flex;align-items:center;gap:11px;padding:8px 9px;border:1px solid var(--line);border-radius:12px;background:#fff;min-height:58px}
+.public-confirmed strong{font-size:.89rem;font-weight:650}
+.public-confirmed .member-avatar,.public-confirmed .member-avatar-button{width:43px!important;height:43px!important;min-width:43px!important;min-height:43px!important;flex:0 0 43px!important;border-width:2px!important}
+.public-confirmed .member-initials{font-size:.77rem}
+.historic-host{background:#fbf7f8}
+@media(max-width:650px){
+ .hero .brand small{font-size:.7rem;letter-spacing:0}
+ .hero .brand h1{font-size:1.3rem;line-height:1.2;margin-top:3px}
+ .hero .brand img{width:49px;height:49px}
+ .hero .admin-gear{width:36px;height:36px;flex-basis:36px}
+ .tabs button{font-size:.77rem;padding:9px 11px}
+ .public-confirmed{min-height:53px}
+}
