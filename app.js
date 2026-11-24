@@ -415,17 +415,33 @@ if(db){await checkAdmin();await load()}}
 async function checkAdmin(){const {data}=await db.auth.getUser();const user=data?.user;admin=false;if(user){try{const rows=await query(db.from('admins').select('user_id').eq('user_id',user.id));admin=rows.length>0}catch(e){console.warn(e)}}render()}
 initial();
 
-// Visualização ampliada da foto, disponível também sem login
-document.addEventListener('click',e=>{
- const button=e.target.closest('[data-enlarge-photo]');
- if(!button)return;
+// v1.6.2: modal independente de <dialog>, compatível com navegadores móveis.
+let photoOpener=null;
+function closePhoto(){
+ const modal=$('photoModal');if(!modal||modal.hidden)return;
+ modal.hidden=true;document.body.classList.remove('photo-open');
+ $('photoFull').removeAttribute('src');
+ if(photoOpener?.isConnected)photoOpener.focus({preventScroll:true});
+ photoOpener=null;
+}
+function openPhoto(button){
  const person=participants.find(p=>p.id===button.dataset.enlargePhoto);
- const image=photoUrl(person);if(!image)return;
- $('photoFull').src=image; $('photoFull').alt=`Foto de ${person.name}`;
+ if(!person)return;
+ const url=photoUrl(person);if(!url)return;
+ photoOpener=button;
+ $('photoFull').src=url;
+ $('photoFull').alt=`Foto de ${person.name}`;
  $('photoFullName').textContent=person.name;
- const modal=$('photoModal'); if(typeof modal.showModal==='function')modal.showModal();
- else modal.setAttribute('open','');
-});
-document.addEventListener('click',e=>{
- if(e.target.id==='photoClose'||e.target.id==='photoModal')$('photoModal').close();
-});
+ $('photoModal').hidden=false;
+ document.body.classList.add('photo-open');
+ $('photoClose').focus({preventScroll:true});
+}
+// Delegação de eventos: funciona também com imagens carregadas depois pelo Supabase.
+document.addEventListener('click',event=>{
+ const button=event.target.closest?.('[data-enlarge-photo]');
+ if(button){event.preventDefault();openPhoto(button);return}
+ if(event.target.closest?.('#photoClose')||event.target.id==='photoModal'){
+  event.preventDefault();closePhoto();
+ }
+},true);
+document.addEventListener('keydown',event=>{if(event.key==='Escape')closePhoto()});

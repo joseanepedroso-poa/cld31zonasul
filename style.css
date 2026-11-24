@@ -141,3 +141,15 @@
 .photo-modal img{display:block;max-width:100%;max-height:calc(90dvh - 95px);width:auto;height:auto;object-fit:contain;margin:auto;border-radius:8px}
 .photo-modal p{margin:10px 0 0;font-size:.92rem;font-weight:600}
 .photo-close{position:absolute;right:-10px;top:-12px;width:38px;height:38px;border:0;border-radius:50%;display:grid;place-items:center;cursor:pointer;background:#fff;color:#684456;font-size:26px;box-shadow:0 3px 12px #0004;padding:0}
+
+/* v1.6.2 — visualizador de fotos compatível com toque no Android/iOS */
+.photo-overlay[hidden]{display:none!important}
+.photo-overlay{position:fixed;inset:0;z-index:99999;background:rgba(28,19,27,.86);display:flex;align-items:center;justify-content:center;padding:16px;overscroll-behavior:contain}
+.photo-overlay-content{position:relative;background:#fff;border-radius:14px;max-width:min(92vw,640px);width:100%;max-height:calc(100dvh - 32px);padding:16px 12px 12px;display:flex;flex-direction:column;align-items:center;box-sizing:border-box}
+.photo-overlay-content img{display:block;max-width:100%;max-height:calc(100dvh - 110px);width:auto;height:auto;object-fit:contain;border-radius:7px}
+.photo-overlay-content p{margin:9px 0 0;font-size:.91rem;font-weight:650;text-align:center;color:#583c48}
+.photo-overlay .photo-close{position:absolute;right:-8px;top:-12px;z-index:2;width:40px;height:40px;display:grid;place-items:center;border-radius:50%;border:0;background:#fff;color:#684456;font-size:26px;box-shadow:0 2px 13px #0004;padding:0;cursor:pointer}
+body.photo-open{overflow:hidden}
+.member-avatar-button{touch-action:manipulation;position:relative;z-index:1;-webkit-tap-highlight-color:transparent}
+.member-avatar-button img{pointer-events:none}
+@media(max-width:650px){.photo-overlay{padding:12px}.photo-overlay-content{max-width:100%;max-height:calc(100dvh - 24px)}.photo-overlay-content img{max-height:calc(100dvh - 100px)}}
