@@ -28,30 +28,45 @@ function wasMainHost(p, currentId=null){
   m.host_participant_id===p.id||(!m.host_participant_id&&normalized(m.host||'')===normalized(p.name))
  ));
 }
+// A anfitriã principal do próprio encontro não concorre nessa rodada.
+// A anfitriã convidada não é excluída por este critério.
+function isCurrentMainHost(p,meeting){
+ if(!p||!meeting)return false;
+ if(meeting.host_participant_id)return meeting.host_participant_id===p.id;
+ return normalized(meeting.host||'')===normalized(p.name);
+}
 function drawAvatar(p){
- if(!p)return '<div class="draw-photo draw-photo-empty">?</div>';
+ if(!p)return '<div class="draw-photo draw-photo-empty"><span class="draw-photo-initials">?</span></div>';
  const url=photoUrl(p),initials=safe(initialsFor(p.name));
- return `<div class="draw-photo">${url?`<img src="${safe(url)}" alt="" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="draw-photo-initials" hidden>${initials}</span>`:`<span class="draw-photo-initials">${initials}</span>`}</div>`;
+ return `<div class="draw-photo" role="img" aria-label="Foto de ${safe(p.name)}">${url?`<img src="${safe(url)}" alt="" decoding="async" referrerpolicy="no-referrer" onerror="this.style.display='none';this.nextElementSibling.hidden=false"><span class="draw-photo-initials" hidden>${initials}</span>`:`<span class="draw-photo-initials">${initials}</span>`}</div>`;
 }
 function setDrawPerson(p,showName=true){
- $('rollingPhoto').innerHTML=drawAvatar(p);
- $('rollingName').textContent=showName?(p?.name||'Quem será?'):'';
- $('rollingName').hidden=!showName;
+ const photo=$('rollingPhoto'),name=$('rollingName');
+ if(!photo||!name)return;
+ photo.innerHTML=drawAvatar(p);
+ name.textContent=showName?(p?.name||'Quem será?'):'';
+ name.hidden=!showName;
 }
+let celebrationTimer;
 function celebrateDraw(){
- const box=$('drawCelebration');if(!box)return;
- box.innerHTML='';
+ const box=$('drawCelebration'),display=$('drawDisplay');if(!box||!display)return;
+ clearTimeout(celebrationTimer);
+ box.replaceChildren();
  const palette=['#ffd8a6','#fff','#f5b8d2','#d9efcf','#f9e4b9'];
- for(let i=0;i<36;i++){
+ // Usa animacao de particulas definida por CSS; o elemento fica por cima do resultado.
+ for(let i=0;i<52;i++){
   const el=document.createElement('span');el.className='confetti';
-  el.style.setProperty('--angle',`${(i*137.508)%360}deg`);
-  el.style.setProperty('--distance',`${95+(i%6)*20}px`);
-  el.style.setProperty('--delay',`${(i%7)*35}ms`);
+  el.style.setProperty('--x',`${Math.cos(i*2.39996)*(90+i%7*16)}px`);
+  el.style.setProperty('--y',`${Math.sin(i*2.39996)*(100+i%5*18)}px`);
+  el.style.setProperty('--delay',`${i%9*27}ms`);
+  el.style.setProperty('--turn',`${i%2?440:-390}deg`);
   el.style.background=palette[i%palette.length];
   box.appendChild(el);
  }
- box.classList.remove('celebrating');void box.offsetWidth;box.classList.add('celebrating');
- setTimeout(()=>{box.classList.remove('celebrating');box.replaceChildren()},2400);
+ box.classList.remove('celebrating');
+ void box.offsetHeight;
+ box.classList.add('celebrating');
+ celebrationTimer=setTimeout(()=>{box.classList.remove('celebrating');box.replaceChildren()},3500);
 }
 function hostsLabel(m){const h=participants.find(p=>p.id===m.host_participant_id)?.name||m.host||'A definir';const co=participants.find(p=>p.id===m.co_host_participant_id)?.name||m.co_host;return co?`${h} e ${co}`:h}
 function hostsDetail(m){const h=participants.find(p=>p.id===m.host_participant_id)?.name||m.host||'A definir';const co=participants.find(p=>p.id===m.co_host_participant_id)?.name||m.co_host;return `<p><strong>Anfitriã sorteada:</strong> ${safe(h)}</p>${co?`<p><strong>Anfitriã convidada:</strong> ${safe(co)}</p>`:''}`}
@@ -220,7 +235,71 @@ function renderAttendanceRows(){
   </button>`;
  }).join(''):`<p class="muted">${attendanceMode==='checkin'?'Nenhuma confirmada encontrada. Vá à aba Confirmações para marcar as integrantes.':'Nenhuma integrante encontrada.'}</p>`;
 }
+// A consulta pública mostra a ESCOLHA PARA O ENCONTRO SEGUINTE,
+// não a pessoa como anfitriã do encontro em que o sorteio ocorreu.
+function renderPublicDraws(){
+ const container=$('publicLatestDraw'),history=$('publicDrawHistory');
+ const linked=draws.map(d=>({
+  draw:d,source:meetings.find(m=>m.id===d.meeting_id)||null,
+  person:participants.find(p=>p.id===d.participant_id)||null,
+  book:books.find(b=>b.id===d.book_id)||null,
+  next:meetings.find(m=>m.source_draw_id===d.id)||null
+ }));
+ // Confirmados primeiro; uma tentativa pendente nunca é apresentada como escolha definitiva.
+ const accepted=linked.filter(x=>x.draw.status==='accepted').sort((a,b)=>new Date(b.draw.created_at||0)-new Date(a.draw.created_at||0));
+ const latest=accepted[0]||null;
+ const live=linked.some(x=>x.draw.status==='pending');
+ if(!latest){
+  container.innerHTML=`<div class="panel public-draw-empty"><div class="eyebrow">NOSSA PRÓXIMA LEITURA</div><h3>Próxima leitura ainda não sorteada</h3><p>${live?'Há um sorteio em andamento, mas o resultado ainda não foi confirmado.':'Quando uma sorteada aceitar, o resultado aparecerá aqui.'}</p></div>`;
+ }else{
+  const person=latest.person;
+  const bookTitle=latest.next?meetingTitle(latest.next):(latest.book?.title||'Livro a indicar');
+  const bookAuthor=latest.book?.author||'';
+  const sourceLabel=latest.source?`${meetingTitle(latest.source)} · ${fmt(latest.source.starts_at)}`:'Encontro de origem não identificado';
+  container.innerHTML=`<div class="public-draw-head"><div class="eyebrow">NOSSA PRÓXIMA LEITURA</div><h2>Uma nova história foi escolhida!</h2></div>
+  <div class="public-draw-result">
+   <div class="eyebrow">SORTEADA PARA O ENCONTRO SEGUINTE</div>
+   ${drawAvatar(person)}
+   <h3>${safe(person?.name||'Participante')}</h3>
+   <p class="public-draw-book">${safe(bookTitle)}</p>
+   ${bookAuthor?`<p class="public-draw-author">${safe(bookAuthor)}</p>`:''}
+   <span class="public-draw-confirmation">✓ Sorteio confirmado</span>
+  </div>
+  <div class="public-draw-origin"><span>Sorteio realizado durante o encontro</span><strong>${safe(sourceLabel)}</strong></div>`;
+ }
+ // Mantém o histórico REAL de tentativas que estejam persistidas no banco.
+ // Não fabrica registros para os encontros anteriores ao site.
+ if(!linked.length){history.innerHTML='';return}
+ const groups=new Map();
+ linked.forEach(x=>{
+  const key=x.draw.meeting_id;
+  if(!groups.has(key))groups.set(key,[]);
+  groups.get(key).push(x);
+ });
+ const grouped=Array.from(groups.values()).sort((a,b)=>{
+  const da=new Date(a[0].source?.starts_at||a.at(-1).draw.created_at||0);
+  const db=new Date(b[0].source?.starts_at||b.at(-1).draw.created_at||0);
+  return db-da;
+ });
+ history.innerHTML=`<details class="public-draw-history"><summary>Histórico de sorteios <span>${groups.size} ${groups.size===1?'encontro':'encontros'}</span></summary>
+  <div class="public-draw-history-body">${grouped.map(items=>{
+   const m=items[0].source;
+   const winner=items.find(x=>x.draw.status==='accepted');
+   const title=m?meetingTitle(m):'Encontro não identificado';
+   const date=m?fmt(m.starts_at):'Data não informada';
+   return `<article class="public-draw-history-item"><div class="public-draw-history-title"><strong>${safe(title)}</strong><span>${safe(date)}</span></div>
+    ${winner?`<p><strong>Escolhida para o encontro seguinte:</strong> ${safe(winner.person?.name||'Participante')} · ${safe(winner.next?meetingTitle(winner.next):(winner.book?.title||'Livro a indicar'))}</p>`:'<p><em>Sorteio sem aceite confirmado</em></p>'}
+    <details class="public-draw-attempts"><summary>Ver tentativas registradas (${items.length})</summary><div>${items.map(x=>{
+     const status=x.draw.status==='accepted'?'Aceitou':x.draw.status==='skipped'?'Não aceitou / novo sorteio':'Aguardando confirmação';
+     return `<p><strong>${safe(x.person?.name||'Participante')}</strong> · ${safe(status)}</p>`;
+    }).join('')}</div></details>
+   </article>`;
+  }).join('')}</div></details>`;
+}
 function renderDraws(){
+ $('drawAdminView').hidden=!admin;
+ $('drawPublicView').hidden=admin;
+ if(!admin){renderPublicDraws();return;}
  const mid=$('drawMeeting').value||meetings[0]?.id;
  const meeting=meetings.find(m=>m.id===mid);
  const d=draws.filter(x=>x.meeting_id===mid);
@@ -248,10 +327,11 @@ function renderDraws(){
  $('drawBtn').hidden=!canDraw||!!accepted;
  $('acceptBtn').hidden=!(canDraw&&last?.status==='pending'&&!accepted);
  $('resetDraws').hidden=!canDraw||!d.length;
- const excluded=participants.filter(p=>attendance.some(a=>a.meeting_id===mid&&a.checked_in&&a.participant_id===p.id)&&wasMainHost(p,mid));
- $('drawNote').textContent=historicWithoutDraws?'':accepted?'Resultado aceito e registrado para este encontro.':d.length?`${d.filter(x=>x.status==='skipped').length} tentativa(s) anterior(es). Quem já foi anfitriã principal não participa.`:'Participam as integrantes presentes que ainda não foram anfitriãs principais, mesmo sem indicação de livro. Quem foi apenas convidada pode concorrer.';
+ const excluded=participants.filter(p=>attendance.some(a=>a.meeting_id===mid&&a.checked_in&&a.confirmed&&a.participant_id===p.id)&&(isCurrentMainHost(p,meeting)||wasMainHost(p,mid)));
+ $('drawNote').textContent=historicWithoutDraws?'':accepted?'Resultado aceito e registrado para este encontro.':d.length?`${d.filter(x=>x.status==='skipped').length} tentativa(s) anterior(es). A anfitriã principal deste encontro e quem já foi anfitriã principal em encontros anteriores não participam.`:'Participam as integrantes confirmadas e presentes, mesmo sem livro indicado, exceto a anfitriã principal deste encontro e quem já foi anfitriã principal antes. Quem foi apenas anfitriã convidada pode concorrer.';
  const excludedBox=$('drawExcluded');
- if(excludedBox){excludedBox.hidden=historicWithoutDraws||!excluded.length;excludedBox.innerHTML=excluded.length?`<strong>Fora do sorteio: já foi anfitriã principal</strong><div>${excluded.map(p=>safe(p.name)).join(' · ')}</div>`:'';}
+ if(excludedBox){excludedBox.hidden=historicWithoutDraws||!excluded.length;
+  excludedBox.innerHTML=excluded.length?`<strong>Fora do sorteio</strong><div class="draw-exclusion-list">${excluded.map(p=>`<div><strong>${safe(p.name)}</strong> <span>— ${isCurrentMainHost(p,meeting)?'Anfitriã principal deste encontro':'Já foi anfitriã principal'}</span></div>`).join('')}</div>`:'';}
 }
 async function saveAttendance(person,changes){let m=currentMeeting;if(!m)return;if(isPastMeeting(meetings.find(x=>x.id===m)))throw Error('O check-in de encontros anteriores está encerrado.');let old=attendance.find(x=>x.meeting_id===m&&x.participant_id===person);if(changes.checked_in===true&&!old?.confirmed)throw Error('Somente participantes confirmadas podem fazer check-in.');let row={meeting_id:m,participant_id:person,confirmed:old?.confirmed||false,checked_in:old?.checked_in||false,suggested_book_id:old?.suggested_book_id||participants.find(p=>p.id===person)?.suggested_book_id||null,...changes};if(row.checked_in)row.confirmed=true;if(!row.confirmed)row.checked_in=false;await query(db.from('attendance').upsert(row,{onConflict:'meeting_id,participant_id'}));await load();}
 async function bulkCheckIn(mark){
@@ -313,19 +393,21 @@ async function runDraw(){
  const previous=draws.filter(d=>d.meeting_id===mid);
  if(previous.some(d=>d.status==='accepted'))return notify('Este sorteio já tem resultado confirmado. Para começar de novo, reinicie a rodada.',true);
  // Apenas confirmadas com check-in que nunca foram anfitriãs PRINCIPAIS.
+ const current=meetings.find(m=>m.id===mid);
  const eligible=attendance.filter(a=>a.meeting_id===mid&&a.checked_in&&a.confirmed
   &&!previous.some(d=>d.participant_id===a.participant_id)
+  &&!isCurrentMainHost(participants.find(p=>p.id===a.participant_id),current)
   &&!wasMainHost(participants.find(p=>p.id===a.participant_id),mid));
- if(!eligible.length)return notify('Não há participantes elegíveis. Quem já foi anfitriã principal não participa; confira check-ins e sorteios anteriores.',true);
+ if(!eligible.length)return notify('Não há participantes elegíveis. A anfitriã principal do encontro e quem já foi anfitriã principal não participam; confira os check-ins.',true);
  rolling=true;$('drawBtn').disabled=true;$('acceptBtn').hidden=true;
  $('drawDisplay').classList.remove('accepted');$('drawDisplay').classList.add('drawing');
  $('rollingBook').textContent='';
  const faces=eligible.map(a=>participants.find(p=>p.id===a.participant_id)).filter(Boolean);
  let spinIndex=0;
  const spin=()=>{setDrawPerson(faces[spinIndex%faces.length],false);spinIndex++};
- spin();const interval=setInterval(spin,210);
+ spin();const interval=setInterval(spin,340);
  try{
-  await new Promise(resolve=>setTimeout(resolve,3600));clearInterval(interval);
+  await new Promise(resolve=>setTimeout(resolve,4200));clearInterval(interval);
   const bytes=new Uint32Array(1);crypto.getRandomValues(bytes);
   const pick=eligible[bytes[0]%eligible.length];
   const lastPending=previous.filter(d=>d.status==='pending').at(-1);
@@ -512,7 +594,7 @@ $('drawMeeting').onchange=renderDraws;$('drawBtn').onclick=runDraw;$('acceptBtn'
   }
   await load();
   if(draftError)notify('Aceite registrado, mas não foi possível criar o rascunho do encontro: '+draftError.message,true);
-  else notify(draftCreated?`✓ Aceite registrado! Próximo encontro criado com ${book?'livro e anfitriã':'anfitriã; o livro pode ser indicado depois'}.`:'✓ Aceite registrado! O resultado está confirmado.');
+  else { const notice=$('message'); if(notice)notice.hidden=true; }
   $('drawDisplay').scrollIntoView({behavior:'smooth',block:'center'});
   celebrateDraw();
  }catch(e){notify(e.message,true)}

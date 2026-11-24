@@ -275,3 +275,57 @@ button.member-avatar-button > .member-initials {line-height:normal}
 @keyframes burst{0%{opacity:0;transform:translate(-50%,-50%) rotate(var(--angle)) translateY(0) scale(.3)}12%{opacity:1}65%{opacity:1}100%{opacity:0;transform:translate(-50%,-50%) rotate(var(--angle)) translateY(calc(-1*var(--distance))) rotate(260deg) scale(.8)}}
 @media(prefers-reduced-motion:reduce){.celebrating .confetti{animation:none}.draw-display.drawing .draw-photo{transition:none}}
 @media(max-width:650px){.draw-display{min-height:240px;padding:18px 10px}.draw-photo{width:106px;height:106px}.draw-display.drawing .draw-photo{width:125px;height:125px}}
+
+/* v2.2 - fotos do sorteio e celebracao visivel em celulares */
+#rollingPhoto{position:relative;display:flex;align-items:center;justify-content:center;min-height:126px;width:100%;margin:10px auto;flex-shrink:0}
+#rollingPhoto .draw-photo{position:relative;flex:0 0 122px;width:122px;height:122px;border-radius:50%;border:4px solid rgba(255,255,255,.9);overflow:hidden;background:#f5dfeb;box-shadow:0 8px 22px rgba(40,12,25,.24);display:flex;align-items:center;justify-content:center;padding:0}
+#rollingPhoto .draw-photo img{display:block;width:100%;height:100%;max-width:none;max-height:none;object-fit:cover;object-position:center;flex:1 1 auto;border:0;border-radius:0;min-width:0;min-height:0}
+#rollingPhoto .draw-photo-initials{font-size:2.15rem;font-weight:700;color:#8e5e76}
+#rollingPhoto .draw-photo-initials[hidden]{display:none!important}
+.draw-display.drawing #rollingPhoto{min-height:148px}
+.draw-display.drawing #rollingPhoto .draw-photo{width:145px;height:145px;flex-basis:145px}
+.draw-display.drawing #rollingName[hidden]{display:none!important}
+#rollingName[hidden]{display:none!important}
+#drawCelebration{display:block;position:absolute;inset:0;z-index:20;pointer-events:none;overflow:hidden}
+#drawCelebration .confetti{position:absolute;top:45%;left:50%;width:10px;height:16px;opacity:0;border-radius:2px;transform:translate(-50%,-50%);animation:none}
+#drawCelebration.celebrating .confetti{animation:clube-fireworks 1.75s ease-out var(--delay,0ms) both}
+@keyframes clube-fireworks{
+ 0%{opacity:1;transform:translate(-50%,-50%) scale(.45) rotate(0deg)}
+ 65%{opacity:1}
+ 100%{opacity:0;transform:translate(calc(-50% + var(--x)),calc(-50% + var(--y))) scale(.85) rotate(var(--turn))}
+}
+.site-version{display:block;margin-top:5px;font-size:.65rem;color:#a5989e}
+@media(max-width:650px){#rollingPhoto{min-height:114px}#rollingPhoto .draw-photo{width:108px;height:108px;flex-basis:108px}.draw-display.drawing #rollingPhoto .draw-photo{width:130px;height:130px;flex-basis:130px}}
+
+@media (prefers-reduced-motion:reduce){#drawCelebration.celebrating .confetti{animation:clube-fireworks 1.75s ease-out var(--delay,0ms) both}}
+
+/* v2.3 — motivo de exclusão do sorteio por integrante */
+.draw-exclusion-list{display:grid;gap:5px;margin-top:8px}.draw-exclusion-list div{line-height:1.4}.draw-exclusion-list span{font-weight:400}
+
+/* v2.4 — consulta pública do sorteio: destino e origem sem ambiguidade */
+#drawAdminView[hidden],#drawPublicView[hidden]{display:none!important}
+.public-draw-head{margin:0 0 16px}.public-draw-head h2{margin:6px 0 0}
+.public-draw-result{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;gap:7px;padding:26px 20px;border-radius:22px;background:linear-gradient(150deg,#925c76,#b28499);color:white}
+.public-draw-result .eyebrow{color:#f9e4eb;letter-spacing:.12em}
+.public-draw-result .draw-photo{width:116px;height:116px;margin:11px 0 3px}
+.public-draw-result h3{font-family:'Playfair Display',serif;font-size:clamp(1.55rem,5vw,2rem);margin:0;color:#fff}
+.public-draw-result p{margin:0;color:#fff}
+.public-draw-result .public-draw-book{font-size:1.07rem}
+.public-draw-result .public-draw-author{opacity:.85;font-size:.84rem}
+.public-draw-confirmation{display:inline-block;margin-top:12px;padding:7px 12px;border:1px solid #fffc;border-radius:25px;font-size:.81rem}
+.public-draw-origin{border:1px solid #e5d9de;background:#faf5f7;border-radius:12px;padding:14px 16px;margin:12px 0 18px;display:flex;flex-direction:column;gap:5px}
+.public-draw-origin span{font-size:.78rem;color:#805f6d}
+.public-draw-origin strong{font-size:.92rem}
+.public-draw-empty{text-align:center}.public-draw-empty p{color:#805f6d}
+.public-draw-history{border:1px solid #e5d9de;border-radius:15px;background:white;overflow:hidden}
+.public-draw-history>summary{padding:15px 16px;cursor:pointer;font-weight:700;color:#634555}
+.public-draw-history>summary span{font-size:.76rem;font-weight:400;color:#967c86;padding-left:9px}
+.public-draw-history-body{padding:4px 13px 14px;display:grid;gap:9px}
+.public-draw-history-item{border-radius:10px;border:1px solid #eee1e6;padding:13px}
+.public-draw-history-title{display:flex;flex-direction:column;gap:2px}
+.public-draw-history-title span{font-size:.78rem;color:#967c86}
+.public-draw-history-item p{font-size:.85rem;margin:10px 0 4px}
+.public-draw-attempts{margin-top:10px;border-top:1px solid #eee1e6;padding-top:9px}
+.public-draw-attempts>summary{cursor:pointer;font-size:.8rem;color:#845c70}
+.public-draw-attempts p{font-size:.78rem;margin:6px 0}
+@media(max-width:650px){.public-draw-result{padding:22px 12px}.public-draw-head h2{font-size:1.38rem}.public-draw-result .draw-photo{width:108px;height:108px}}
