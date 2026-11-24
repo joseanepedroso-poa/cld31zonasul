@@ -30,11 +30,27 @@ function wasMainHost(p, currentId=null){
 }
 // A anfitriã principal do próprio encontro não concorre nessa rodada.
 // A anfitriã convidada não é excluída por este critério.
+function mainHostParticipant(meeting){
+ if(!meeting)return null;
+ if(meeting.host_participant_id){
+  return participants.find(p=>p.id===meeting.host_participant_id)||null;
+ }
+ const label=normalized(meeting.host||'');
+ if(!label||label==='a definir')return null;
+ const exact=participants.filter(p=>normalized(p.name)===label);
+ if(exact.length===1)return exact[0];
+ // Apelidos conhecidos do Grupo 31: só usar se a correspondência for única.
+ if(['ali','ale'].includes(label)){
+  const candidates=participants.filter(p=>normalized(p.name).split(' ')[0]==='alessandra');
+  if(candidates.length===1)return candidates[0];
+ }
+ return null;
+}
 function isCurrentMainHost(p,meeting){
  if(!p||!meeting)return false;
- if(meeting.host_participant_id)return meeting.host_participant_id===p.id;
- return normalized(meeting.host||'')===normalized(p.name);
+ return mainHostParticipant(meeting)?.id===p.id;
 }
+
 function drawAvatar(p){
  if(!p)return '<div class="draw-photo draw-photo-empty"><span class="draw-photo-initials">?</span></div>';
  const url=photoUrl(p),initials=safe(initialsFor(p.name));
@@ -73,6 +89,7 @@ function hostsDetail(m){const h=participants.find(p=>p.id===m.host_participant_i
 function meetingCard(m,featured=false){const count=attendance.filter(a=>a.meeting_id===m.id&&a.confirmed).length;return `<article class="meeting-card ${featured?'featured':''}">${m.card_url?`<img src="${safe(m.card_url)}" alt="Card de divulgação do encontro" loading="lazy">`:'<div class="placeholder">Card do encontro em breve</div>'}<div class="content"><div class="eyebrow">${featured?'PRÓXIMA LEITURA':'ENCONTRO'}</div><h3>${safe(meetingTitle(m))}</h3><div class="meta">${safe(fmt(m.starts_at))}<br>Anfitriãs: ${safe(hostsLabel(m))}<br>${safe(m.place||'Local a definir')}</div>${featured&&(!m.starts_at||!m.place||!m.card_url)?'<div class="soon">Em breve, mais informações sobre o encontro.</div>':''}<button class="outline" data-open="${safe(m.id)}">Ver detalhes${admin?` · ${count} confirmada(s)`:''}</button></div></article>`}
 function renderMeetings(){
  const pastWasOpen=$('pastDisclosure')?.open||false;
+ const plannedWasOpen=$('plannedDisclosure')?.open||false;
  const selectedMeeting=$('drawMeeting').value;
  const future=meetings.filter(isUpcoming).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
  const unscheduled=meetings.filter(m=>!m.starts_at).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
@@ -81,8 +98,11 @@ function renderMeetings(){
  const planned=meetings.filter(m=>m.id!==featured?.id&&isUpcoming(m)).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
  const drafts=unscheduled.filter(m=>m.id!==featured?.id);
  $('meetingCards').innerHTML=featured?meetingCard(featured,true):`<div class="empty"><strong>Próximo encontro em preparação</strong><p>Assim que o livro ou a anfitriã forem cadastrados, as informações aparecerão aqui.</p></div>`;
- $('pastMeetings').innerHTML=`<details class="archive-disclosure" id="pastDisclosure"><summary><span><strong>Encontros anteriores</strong><small>${previous.length} ${previous.length===1?'encontro registrado':'encontros registrados'}</small></span><span class="archive-chevron" aria-hidden="true">⌄</span></summary><div class="archive-body">${previous.length?`<div class="meeting-grid archive-grid">${previous.map(m=>meetingCard(m)).join('')}</div>`:'<p class="muted">Ainda não há encontros anteriores cadastrados.</p>'}</div></details>`+(planned.length||drafts.length?`<details class="archive-disclosure"><summary><span><strong>Outros encontros planejados</strong><small>${planned.length+drafts.length} ${planned.length+drafts.length===1?'encontro':'encontros'}</small></span><span class="archive-chevron" aria-hidden="true">⌄</span></summary><div class="archive-body"><div class="meeting-grid archive-grid">${[...planned,...drafts].map(m=>meetingCard(m)).join('')}</div></div></details>`:'');
+ const pastSection=`<details class="archive-disclosure" id="pastDisclosure"><summary><span><strong>Encontros anteriores</strong><small>${previous.length} ${previous.length===1?'encontro registrado':'encontros registrados'}</small></span><span class="archive-chevron" aria-hidden="true">⌄</span></summary><div class="archive-body">${previous.length?`<div class="meeting-grid archive-grid">${previous.map(m=>meetingCard(m)).join('')}</div>`:'<p class="muted">Ainda não há encontros anteriores cadastrados.</p>'}</div></details>`;
+ const plannedSection=planned.length||drafts.length?`<details class="archive-disclosure" id="plannedDisclosure"><summary><span><strong>Outros encontros planejados</strong><small>${planned.length+drafts.length} ${planned.length+drafts.length===1?'encontro':'encontros'}</small></span><span class="archive-chevron" aria-hidden="true">⌄</span></summary><div class="archive-body"><div class="meeting-grid archive-grid">${[...planned,...drafts].map(m=>meetingCard(m)).join('')}</div></div></details>`:'';
+ $('pastMeetings').innerHTML=plannedSection+pastSection;
  if(pastWasOpen)$('pastDisclosure').open=true;
+ if(plannedWasOpen&&$('plannedDisclosure'))$('plannedDisclosure').open=true;
  $('drawMeeting').innerHTML=meetings.map(m=>`<option value="${safe(m.id)}">${safe(meetingTitle(m))} · ${safe(fmt(m.starts_at))}</option>`).join('');
  if(meetings.some(m=>m.id===selectedMeeting))$('drawMeeting').value=selectedMeeting;
  else if(featured)$('drawMeeting').value=featured.id;
@@ -329,11 +349,14 @@ function renderDraws(){
  $('drawBtn').hidden=!canDraw||!!accepted;
  $('acceptBtn').hidden=!(canDraw&&last?.status==='pending'&&!accepted);
  $('resetDraws').hidden=!canDraw||!d.length;
- const excluded=participants.filter(p=>attendance.some(a=>a.meeting_id===mid&&a.checked_in&&a.confirmed&&a.participant_id===p.id)&&(isCurrentMainHost(p,meeting)||wasMainHost(p,mid)));
+ const mainHost=mainHostParticipant(meeting);
+ const excluded=participants.filter(p=>isCurrentMainHost(p,meeting)||(
+  attendance.some(a=>a.meeting_id===mid&&a.checked_in&&a.confirmed&&a.participant_id===p.id)
+  &&wasMainHost(p,mid)));
  $('drawNote').textContent=historicWithoutDraws?'':accepted?'Resultado aceito e registrado para este encontro.':d.length?`${d.filter(x=>x.status==='skipped').length} tentativa(s) anterior(es). A anfitriã principal deste encontro e quem já foi anfitriã principal em encontros anteriores não participam.`:'Participam as integrantes confirmadas e presentes, mesmo sem livro indicado, exceto a anfitriã principal deste encontro e quem já foi anfitriã principal antes. Quem foi apenas anfitriã convidada pode concorrer.';
  const excludedBox=$('drawExcluded');
- if(excludedBox){excludedBox.hidden=historicWithoutDraws||!excluded.length;
-  excludedBox.innerHTML=excluded.length?`<strong>Fora do sorteio</strong><div class="draw-exclusion-list">${excluded.map(p=>`<div><strong>${safe(p.name)}</strong> <span>— ${isCurrentMainHost(p,meeting)?'Anfitriã principal deste encontro':'Já foi anfitriã principal'}</span></div>`).join('')}</div>`:'';}
+ if(excludedBox){excludedBox.hidden=historicWithoutDraws||(!excluded.length&&!((meeting?.host||meeting?.host_participant_id)&&!mainHost));
+  excludedBox.innerHTML=excluded.length?`<strong>Fora do sorteio</strong><div class="draw-exclusion-list">${excluded.map(p=>`<div><strong>${safe(p.name)}</strong> <span>— ${isCurrentMainHost(p,meeting)?'Anfitriã principal deste encontro':'Já foi anfitriã principal'}</span></div>`).join('')}</div>`:((meeting?.host||meeting?.host_participant_id)&&!mainHost?'<strong>Atenção:</strong> selecione a anfitriã principal na edição do encontro para liberar o sorteio.':'');}
 }
 async function saveAttendance(person,changes){let m=currentMeeting;if(!m)return;if(isPastMeeting(meetings.find(x=>x.id===m)))throw Error('O check-in de encontros anteriores está encerrado.');let old=attendance.find(x=>x.meeting_id===m&&x.participant_id===person);if(changes.checked_in===true&&!old?.confirmed)throw Error('Somente participantes confirmadas podem fazer check-in.');let row={meeting_id:m,participant_id:person,confirmed:old?.confirmed||false,checked_in:old?.checked_in||false,suggested_book_id:old?.suggested_book_id||participants.find(p=>p.id===person)?.suggested_book_id||null,...changes};if(row.checked_in)row.confirmed=true;if(!row.confirmed)row.checked_in=false;await query(db.from('attendance').upsert(row,{onConflict:'meeting_id,participant_id'}));await load();}
 async function bulkCheckIn(mark){
@@ -392,10 +415,14 @@ async function runDraw(){
  const mid=$('drawMeeting').value;
  if(!mid)return notify('Cadastre um encontro primeiro.',true);
  if(isPastMeeting(meetings.find(m=>m.id===mid)))return notify('Não é possível sortear em um encontro anterior.',true);
+ const current=meetings.find(m=>m.id===mid);
+ const hostName=normalized(current?.host||'');
+ if((current?.host_participant_id||hostName&&hostName!=='a definir')&&!mainHostParticipant(current)){
+  return notify('Não foi possível identificar a anfitriã principal no cadastro. Edite o encontro e selecione a anfitriã na lista antes de sortear.',true);
+ }
  const previous=draws.filter(d=>d.meeting_id===mid);
  if(previous.some(d=>d.status==='accepted'))return notify('Este sorteio já tem resultado confirmado. Para começar de novo, reinicie a rodada.',true);
  // Apenas confirmadas com check-in que nunca foram anfitriãs PRINCIPAIS.
- const current=meetings.find(m=>m.id===mid);
  const eligible=attendance.filter(a=>a.meeting_id===mid&&a.checked_in&&a.confirmed
   &&!previous.some(d=>d.participant_id===a.participant_id)
   &&!isCurrentMainHost(participants.find(p=>p.id===a.participant_id),current)
