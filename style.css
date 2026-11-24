@@ -153,3 +153,38 @@ body.photo-open{overflow:hidden}
 .member-avatar-button{touch-action:manipulation;position:relative;z-index:1;-webkit-tap-highlight-color:transparent}
 .member-avatar-button img{pointer-events:none}
 @media(max-width:650px){.photo-overlay{padding:12px}.photo-overlay-content{max-width:100%;max-height:calc(100dvh - 24px)}.photo-overlay-content img{max-height:calc(100dvh - 100px)}}
+
+/* v1.6.3 — recorte circular real também para fotos clicáveis no celular */
+.member-avatar,
+.member-avatar-button {
+  position: relative;
+  display: block;
+  padding: 0 !important;
+  overflow: hidden;
+  border-radius: 50% !important;
+  aspect-ratio: 1 / 1;
+  min-width: 0;
+  min-height: 0;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+.member-avatar > img,
+.member-avatar-button > img {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: cover !important;
+  object-position: center center;
+  border-radius: 50%;
+  display: block;
+}
+.member-avatar > .member-initials {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.member-avatar > .member-initials[hidden] { display: none; }
