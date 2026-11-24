@@ -6,12 +6,42 @@ let admin=false,participants=[],books=[],meetings=[],attendance=[],draws=[],curr
 let coverBookId=null,coverBusy=false,coverOptions=[];
 let attendanceMode='checkin', attendanceSearch='', attendanceOnlyConfirmed=false, attendanceSaving=false;
 let photoTargetId=null,photoSaving=false;
+let meetingScreen='home', meetingReturnScreen='home', meetingReturnList='home';
 const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=x=>x?new Date(x).toLocaleString('pt-BR',{dateStyle:'medium',timeStyle:'short'}):'Data a definir';
 function notify(s,error=false){const el=$('message');el.textContent=s;el.className='notice'+(error?' error':'');el.hidden=false;window.scrollTo({top:0,behavior:'smooth'});}
 async function query(p){const {data,error}=await p;if(error)throw error;return data}
 async function load(){if(!db)return;try{[participants,books,meetings,attendance,draws]=await Promise.all([query(db.from('participants').select('*').order('name')),query(db.from('books').select('*').order('title')),query(db.from('meetings').select('*').order('starts_at',{ascending:false})),query(db.from('attendance').select('*')),query(db.from('draws').select('*').order('created_at'))]);render();}catch(e){notify('Não foi possível carregar os dados: '+e.message,true)}}
-function switchTab(t){document.querySelectorAll('.tab').forEach(el=>el.hidden=el.id!==`tab-${t}`);document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));}
+function switchTab(t){document.querySelectorAll('.tab').forEach(el=>el.hidden=el.id!==`tab-${t}`);document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));if(t==='encontros'&&meetingScreen!=='home'){showMeetingScreen('home');}}
+function showMeetingScreen(screen,back=null){
+ if(back)meetingReturnScreen=back;
+ meetingScreen=screen;
+ $('meetingsHome').hidden=screen!=='home';
+ $('meetingsArchive').hidden=!['past','planned'].includes(screen);
+ $('meetingsDetailsScreen').hidden=screen!=='detail';
+ $('meetingsEditorScreen').hidden=screen!=='edit';
+ if(screen==='home'){$('meetingDetail').hidden=true;currentMeeting=null;}
+ if(screen==='past'||screen==='planned')renderMeetingArchive(screen);
+}
+function meetingNavigate(screen){showMeetingScreen(screen);window.scrollTo({top:0,behavior:'smooth'});}
+function meetingArchiveRow(m){
+ const hosts=hostsLabel(m);
+ const date=m.starts_at?fmt(m.starts_at):'Data a definir';
+ return `<button type="button" class="meeting-archive-row" data-open="${safe(m.id)}">${m.card_url?`<img src="${safe(m.card_url)}" alt="" loading="lazy">`:'<span class="meeting-archive-placeholder" aria-hidden="true">📖</span>'}<span class="meeting-archive-text"><strong>${safe(meetingTitle(m))}</strong><small>${safe(date)}</small><small>Anfitriã(s): ${safe(hosts)}</small></span><span class="meeting-archive-chevron" aria-hidden="true">›</span></button>`;
+}
+function renderMeetingArchive(screen){
+ const future=meetings.filter(isUpcoming).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
+ const unscheduled=meetings.filter(m=>!m.starts_at).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
+ const featured=future[0]||unscheduled[0]||null;
+ const items=screen==='past'?meetings.filter(isPastMeeting).sort((a,b)=>new Date(b.starts_at)-new Date(a.starts_at)):[...future.filter(m=>m.id!==featured?.id),...unscheduled.filter(m=>m.id!==featured?.id)];
+ $('meetingsArchiveTitle').textContent=screen==='past'?'Encontros anteriores':'Outros encontros planejados';
+ $('meetingsArchiveList').innerHTML=items.length?items.map(meetingArchiveRow).join(''):'<div class="empty">Nenhum encontro nesta lista.</div>';
+}
+function openMeetingScreen(id){
+ meetingReturnList=['past','planned'].includes(meetingScreen)?meetingScreen:'home';
+ renderDetail(id);showMeetingScreen('detail');window.scrollTo({top:0,behavior:'smooth'});
+}
+
 function render(){if(!admin&&$('coverManager')){$('coverManager').hidden=true;coverBookId=null;}document.querySelectorAll('.admin-only').forEach(el=>{if(!['meetingFormPanel','participantEditor','authPanel','coverManager'].includes(el.id))el.hidden=!admin});$('loginToggle').setAttribute('aria-label',admin?'Abrir opções administrativas':'Entrar como administrador');$('loginToggle').title=admin?'Opções administrativas':'Entrar como administrador';$('logout').hidden=!admin;$('loginForm').hidden=admin;renderMeetings();renderParticipants();renderDraws();if(currentMeeting)renderDetail(currentMeeting);}
 function localDay(value){if(!value)return null;const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(value));const get=type=>parts.find(part=>part.type===type)?.value||'';return `${get('year')}-${get('month')}-${get('day')}`;}
 function isPastMeeting(m){return !!m?.starts_at&&localDay(m.starts_at)<localDay(new Date());}
@@ -88,21 +118,15 @@ function hostsLabel(m){const h=participants.find(p=>p.id===m.host_participant_id
 function hostsDetail(m){const h=participants.find(p=>p.id===m.host_participant_id)?.name||m.host||'A definir';const co=participants.find(p=>p.id===m.co_host_participant_id)?.name||m.co_host;return `<p><strong>Anfitriã sorteada:</strong> ${safe(h)}</p>${co?`<p><strong>Anfitriã convidada:</strong> ${safe(co)}</p>`:''}`}
 function meetingCard(m,featured=false){const count=attendance.filter(a=>a.meeting_id===m.id&&a.confirmed).length;return `<article class="meeting-card ${featured?'featured':''}">${m.card_url?`<img src="${safe(m.card_url)}" alt="Card de divulgação do encontro" loading="lazy">`:'<div class="placeholder">Card do encontro em breve</div>'}<div class="content"><div class="eyebrow">${featured?'PRÓXIMA LEITURA':'ENCONTRO'}</div><h3>${safe(meetingTitle(m))}</h3><div class="meta">${safe(fmt(m.starts_at))}<br>Anfitriãs: ${safe(hostsLabel(m))}<br>${safe(m.place||'Local a definir')}</div>${featured&&(!m.starts_at||!m.place||!m.card_url)?'<div class="soon">Em breve, mais informações sobre o encontro.</div>':''}<button class="outline" data-open="${safe(m.id)}">Ver detalhes${admin?` · ${count} confirmada(s)`:''}</button></div></article>`}
 function renderMeetings(){
- const pastWasOpen=$('pastDisclosure')?.open||false;
- const plannedWasOpen=$('plannedDisclosure')?.open||false;
  const selectedMeeting=$('drawMeeting').value;
  const future=meetings.filter(isUpcoming).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
  const unscheduled=meetings.filter(m=>!m.starts_at).sort((a,b)=>new Date(b.created_at||0)-new Date(a.created_at||0));
  const featured=future[0]||unscheduled[0]||null;
- const previous=meetings.filter(m=>m.starts_at&&!isUpcoming(m)).sort((a,b)=>new Date(b.starts_at)-new Date(a.starts_at));
- const planned=meetings.filter(m=>m.id!==featured?.id&&isUpcoming(m)).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
- const drafts=unscheduled.filter(m=>m.id!==featured?.id);
- $('meetingCards').innerHTML=featured?meetingCard(featured,true):`<div class="empty"><strong>Próximo encontro em preparação</strong><p>Assim que o livro ou a anfitriã forem cadastrados, as informações aparecerão aqui.</p></div>`;
- const pastSection=`<details class="archive-disclosure" id="pastDisclosure"><summary><span><strong>Encontros anteriores</strong><small>${previous.length} ${previous.length===1?'encontro registrado':'encontros registrados'}</small></span><span class="archive-chevron" aria-hidden="true">⌄</span></summary><div class="archive-body">${previous.length?`<div class="meeting-grid archive-grid">${previous.map(m=>meetingCard(m)).join('')}</div>`:'<p class="muted">Ainda não há encontros anteriores cadastrados.</p>'}</div></details>`;
- const plannedSection=planned.length||drafts.length?`<details class="archive-disclosure" id="plannedDisclosure"><summary><span><strong>Outros encontros planejados</strong><small>${planned.length+drafts.length} ${planned.length+drafts.length===1?'encontro':'encontros'}</small></span><span class="archive-chevron" aria-hidden="true">⌄</span></summary><div class="archive-body"><div class="meeting-grid archive-grid">${[...planned,...drafts].map(m=>meetingCard(m)).join('')}</div></div></details>`:'';
- $('pastMeetings').innerHTML=plannedSection+pastSection;
- if(pastWasOpen)$('pastDisclosure').open=true;
- if(plannedWasOpen&&$('plannedDisclosure'))$('plannedDisclosure').open=true;
+ const previous=meetings.filter(isPastMeeting).sort((a,b)=>new Date(b.starts_at)-new Date(a.starts_at));
+ const planned=[...future.filter(m=>m.id!==featured?.id),...unscheduled.filter(m=>m.id!==featured?.id)];
+ $('meetingCards').innerHTML=featured?meetingCard(featured,true):'<div class="empty"><strong>Próximo encontro em preparação</strong><p>Assim que o livro ou a anfitriã forem cadastrados, as informações aparecerão aqui.</p></div>';
+ $('pastMeetings').innerHTML=`${planned.length?`<button type="button" class="meeting-list-link" data-meeting-go="planned"><span><strong>Outros encontros planejados</strong><small>${planned.length} ${planned.length===1?'encontro':'encontros'}</small></span><span aria-hidden="true">›</span></button>`:''}<button type="button" class="meeting-list-link" data-meeting-go="past"><span><strong>Encontros anteriores</strong><small>${previous.length} ${previous.length===1?'encontro registrado':'encontros registrados'}</small></span><span aria-hidden="true">›</span></button>`;
+ if(meetingScreen==='past'||meetingScreen==='planned')renderMeetingArchive(meetingScreen);
  $('drawMeeting').innerHTML=meetings.map(m=>`<option value="${safe(m.id)}">${safe(meetingTitle(m))} · ${safe(fmt(m.starts_at))}</option>`).join('');
  if(meetings.some(m=>m.id===selectedMeeting))$('drawMeeting').value=selectedMeeting;
  else if(featured)$('drawMeeting').value=featured.id;
@@ -376,6 +400,8 @@ async function bulkCheckIn(mark){
  finally{attendanceSaving=false;renderAttendanceRows();}
 }
 function meetingEditor(m){
+ meetingReturnScreen=meetingScreen==='detail'?'detail':'home';
+ showMeetingScreen('edit');
  $('meetingFormPanel').hidden=false;
  $('meetingId').value=m?.id||'';
  const chosen=m?.book_id||books.find(b=>normalized(b.title)===normalized(m?.title||''))?.id||'';
@@ -547,19 +573,19 @@ document.addEventListener('change',async e=>{
  try{notify('Enviando foto...');await setParticipantPhoto(personId,file)}catch(err){notify('Não foi possível salvar a foto: '+err.message,true)}
  finally{e.target.value=''}
 });
-async function initial(){const logo=$('logo');logo.onerror=()=>{logo.hidden=true};$('brandHome').onclick=()=>{switchTab('encontros');$('meetingDetail').hidden=true;$('meetingFormPanel').hidden=true;currentMeeting=null;window.scrollTo({top:0,behavior:'smooth'})};$('setup').hidden=configured;document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));$('loginToggle').onclick=()=>{$('authPanel').hidden=!$('authPanel').hidden;if(!$('authPanel').hidden)$('authPanel').scrollIntoView({behavior:'smooth'})};$('logout').onclick=async()=>{await db.auth.signOut();admin=false;render()};$('loginForm').onsubmit=async e=>{e.preventDefault();if(!db)return notify('Configure o Supabase primeiro.',true);try{await query(db.auth.signInWithPassword({email:$('email').value,password:$('password').value}));await checkAdmin();$('authPanel').hidden=admin;if(!admin)notify('A conta existe, mas não está autorizada como admin.',true);}catch(err){notify('Não foi possível entrar: '+err.message,true)}};
+async function initial(){const logo=$('logo');logo.onerror=()=>{logo.hidden=true};$('brandHome').onclick=()=>{switchTab('encontros');showMeetingScreen('home');window.scrollTo({top:0,behavior:'smooth'})};$('setup').hidden=configured;document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));$('loginToggle').onclick=()=>{$('authPanel').hidden=!$('authPanel').hidden;if(!$('authPanel').hidden)$('authPanel').scrollIntoView({behavior:'smooth'})};$('logout').onclick=async()=>{await db.auth.signOut();admin=false;render()};$('loginForm').onsubmit=async e=>{e.preventDefault();if(!db)return notify('Configure o Supabase primeiro.',true);try{await query(db.auth.signInWithPassword({email:$('email').value,password:$('password').value}));await checkAdmin();$('authPanel').hidden=admin;if(!admin)notify('A conta existe, mas não está autorizada como admin.',true);}catch(err){notify('Não foi possível entrar: '+err.message,true)}};
 $('searchCoverInEditor').onclick=()=>{const p=participants.find(x=>x.id===$('participantId').value);const b=bookForParticipant(p);if(b)openCoverSearch(b.id)};
  $('closeCoverManager').onclick=()=>{$('coverManager').hidden=true;coverBookId=null};
  $('cancelCover').onclick=()=>{coverBookId=null;$('coverEditor').hidden=true;$('coverManager').hidden=true};
  $('uploadCover').onclick=async()=>{if(coverBusy)return;try{$('uploadCover').disabled=true;await uploadCover()}catch(err){$('coverFeedback').textContent=err.message}finally{$('uploadCover').disabled=false}};
  $('participantBook').addEventListener('input',()=>{$('participantReadWrap').hidden=!$('participantBook').value.trim();refreshParticipantCoverControls()});$('participantAuthor').addEventListener('input',refreshParticipantCoverControls);
- $('newParticipant').onclick=()=>participantEditor(null);$('cancelParticipant').onclick=()=>$('participantEditor').hidden=true;$('newMeeting').onclick=()=>meetingEditor(null);$('cancelMeeting').onclick=()=>$('meetingFormPanel').hidden=true;
+ $('newParticipant').onclick=()=>participantEditor(null);$('cancelParticipant').onclick=()=>$('participantEditor').hidden=true;$('newMeeting').onclick=()=>meetingEditor(null);$('cancelMeeting').onclick=()=>{showMeetingScreen(meetingReturnScreen);if(meetingReturnScreen==='detail'&&currentMeeting)renderDetail(currentMeeting);window.scrollTo({top:0,behavior:'smooth'})};
 $('meetingForm').onsubmit=async e=>{e.preventDefault();try{let old=meetings.find(m=>m.id===$('meetingId').value);let card_url=old?.card_url||'';let file=$('meetingImage').files[0];if(file){if(file.size>5242880)throw Error('O card deve ter até 5 MB.');const ext=file.name.split('.').pop().toLowerCase();const path=`${crypto.randomUUID()}.${ext}`;await query(db.storage.from('meeting-cards').upload(path,file,{contentType:file.type}));card_url=db.storage.from('meeting-cards').getPublicUrl(path).data.publicUrl}const selectedBook=$('meetingBook').value;
  if(selectedBook==='legacy')throw Error('Selecione o livro cadastrado para vincular este encontro.');
  const book=books.find(b=>b.id===selectedBook);
  const host=$('meetingHost').value.trim(), co_host=$('meetingCoHost').value.trim()||null;
  const hostPerson=participants.find(p=>p.name===host), coHostPerson=participants.find(p=>p.name===co_host);
- const row={title:book?.title||'Livro a definir',book_id:book?.id||null,starts_at:$('meetingDate').value?new Date($('meetingDate').value).toISOString():null,place:$('meetingPlace').value.trim(),host,co_host,host_participant_id:hostPerson?.id||null,co_host_participant_id:coHostPerson?.id||null,card_url};if(row.host&&row.co_host&&row.host===row.co_host)throw Error('Escolha duas integrantes diferentes para anfitriãs.');if(old)await query(db.from('meetings').update(row).eq('id',old.id));else await query(db.from('meetings').insert(row));$('meetingFormPanel').hidden=true;await load();notify('Encontro salvo!')}catch(err){notify(err.message,true)}};
+ const row={title:book?.title||'Livro a definir',book_id:book?.id||null,starts_at:$('meetingDate').value?new Date($('meetingDate').value).toISOString():null,place:$('meetingPlace').value.trim(),host,co_host,host_participant_id:hostPerson?.id||null,co_host_participant_id:coHostPerson?.id||null,card_url};if(row.host&&row.co_host&&row.host===row.co_host)throw Error('Escolha duas integrantes diferentes para anfitriãs.');if(old)await query(db.from('meetings').update(row).eq('id',old.id));else await query(db.from('meetings').insert(row));$('meetingFormPanel').hidden=true;showMeetingScreen('home');await load();notify('Encontro salvo!')}catch(err){notify(err.message,true)}};
 $('participantForm').onsubmit=async e=>{e.preventDefault();if(!admin)return;const btn=$('saveParticipant');btn.disabled=true;try{const id=$('participantId').value;const name=$('participantName').value.trim(),title=$('participantBook').value.trim(),author=$('participantAuthor').value.trim();if(!name)throw Error('Preencha o nome da integrante.');if(author&&!title)throw Error('Informe o título do livro ou deixe também a autoria em branco.');const readByClub=$('participantRead').checked;const old=participants.find(p=>p.id===id);const oldBook=bookForParticipant(old);let bookId=oldBook?.id||null;let createdBookId=null;
 if(!title){bookId=null;}else if(!oldBook||oldBook.title!==title||oldBook.author!==author){const existing=books.find(b=>b.title.toLocaleLowerCase('pt-BR')===title.toLocaleLowerCase('pt-BR')&&b.author.toLocaleLowerCase('pt-BR')===author.toLocaleLowerCase('pt-BR'));if(existing){bookId=existing.id;}else{const result=await query(db.from('books').insert({title,author}).select('id').single());bookId=result.id;createdBookId=bookId;}}
 try{if(old){await query(db.from('participants').update({name,suggested_book_id:bookId}).eq('id',id))}else{await query(db.from('participants').insert({name,suggested_book_id:bookId}))}}catch(err){if(createdBookId)await db.from('books').delete().eq('id',createdBookId);throw err;}
@@ -609,10 +635,14 @@ document.body.addEventListener('input',e=>{
  attendanceSearch=e.target.value;renderAttendanceRows();
  const el=$('attendanceSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}
 });
+document.body.addEventListener('click',e=>{
+ const go=e.target.closest('[data-meeting-go]');if(go){meetingNavigate(go.dataset.meetingGo);return}
+ const back=e.target.closest('[data-meeting-back]');if(back){let target=back.dataset.meetingBack==='home'?'home':meetingScreen==='edit'?meetingReturnScreen:meetingReturnList; if(target==='detail'&&currentMeeting)renderDetail(currentMeeting);meetingNavigate(target);}
+});
 document.body.addEventListener('click',async e=>{let t=e.target.closest('[data-open],[data-edit-meeting],[data-active],[data-edit-participant],[data-delete-participant],[data-cover-book],[data-choose-cover]');if(!t)return;try{
  if(t.dataset.coverBook){await openCoverSearch(t.dataset.coverBook);return}
  if(t.dataset.chooseCover!==undefined){if(coverBusy)return;const candidate=coverOptions[Number(t.dataset.chooseCover)];if(candidate){await saveCover(candidate.url)}return}
- if(t.dataset.open){renderDetail(t.dataset.open);$('meetingDetail').scrollIntoView({behavior:'smooth'})}if(admin&&t.dataset.editParticipant)participantEditor(participants.find(p=>p.id===t.dataset.editParticipant));if(admin&&t.dataset.deleteParticipant)await deleteParticipant(t.dataset.deleteParticipant);if(admin&&t.dataset.editMeeting)meetingEditor(meetings.find(m=>m.id===t.dataset.editMeeting));if(admin&&t.dataset.active){let p=participants.find(p=>p.id===t.dataset.active);await query(db.from('participants').update({active:!p.active}).eq('id',p.id));await load()}}catch(err){notify(err.message,true)}});
+ if(t.dataset.open){openMeetingScreen(t.dataset.open)}if(admin&&t.dataset.editParticipant)participantEditor(participants.find(p=>p.id===t.dataset.editParticipant));if(admin&&t.dataset.deleteParticipant)await deleteParticipant(t.dataset.deleteParticipant);if(admin&&t.dataset.editMeeting)meetingEditor(meetings.find(m=>m.id===t.dataset.editMeeting));if(admin&&t.dataset.active){let p=participants.find(p=>p.id===t.dataset.active);await query(db.from('participants').update({active:!p.active}).eq('id',p.id));await load()}}catch(err){notify(err.message,true)}});
 document.body.addEventListener('change',async e=>{const t=e.target;if(!admin)return;try{if(t.dataset.flag)await saveAttendance(t.dataset.person,{[t.dataset.flag]:t.checked});}catch(err){notify(err.message,true);await load()}});
 $('drawMeeting').onchange=renderDraws;$('drawBtn').onclick=runDraw;$('acceptBtn').onclick=async()=>{
  if(!admin||rolling)return;

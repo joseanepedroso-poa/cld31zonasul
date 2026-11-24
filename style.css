@@ -343,3 +343,20 @@ button.member-avatar-button > .member-initials {line-height:normal}
 .attendance-avatar-initials{font-size:.76rem;font-weight:700;line-height:1}
 .attendance-avatar-initials[hidden]{display:none}
 @media(max-width:650px){.attendance-avatar{width:40px;height:40px;flex-basis:40px}.attendance-person-identity{gap:9px}.attendance-person-status{font-size:.72rem}}
+
+/* 2.7 — navegação por telas dentro de Encontros */
+.meetings-screen[hidden],#meetingsHome[hidden]{display:none!important}
+.meeting-back{display:inline-flex;align-items:center;background:transparent;color:var(--wine);border:0;padding:10px 2px;margin:3px 0 13px;font-size:.86rem;font-weight:700}
+.meeting-list-link{width:100%;display:flex;justify-content:space-between;align-items:center;text-align:left;background:#fff;color:var(--dark);border:1px solid var(--line);border-radius:14px;padding:15px 18px;margin:10px 0}
+.meeting-list-link strong{display:block;font:600 1.13rem 'Playfair Display',Georgia,serif}
+.meeting-list-link small{display:block;color:var(--sub);font-size:.75rem;margin-top:2px}
+.meeting-list-link>span:last-child{font-size:1.75rem;line-height:1;color:var(--wine)}
+.meeting-archive-list{display:grid;gap:9px}
+.meeting-archive-row{width:100%;display:flex;gap:12px;align-items:center;text-align:left;background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:14px;padding:11px 12px;min-height:91px}
+.meeting-archive-row img,.meeting-archive-placeholder{width:68px;height:76px;object-fit:contain;border-radius:7px;flex:0 0 68px;background:#f8eff2}
+.meeting-archive-placeholder{display:flex;align-items:center;justify-content:center;font-size:1.55rem}
+.meeting-archive-text{display:flex;flex:1;min-width:0;flex-direction:column;gap:2px;overflow-wrap:anywhere}
+.meeting-archive-text strong{font:600 1.06rem 'Playfair Display',Georgia,serif;line-height:1.3}
+.meeting-archive-text small{font-size:.77rem;color:var(--sub);line-height:1.3}
+.meeting-archive-chevron{font-size:1.65rem;color:var(--wine);line-height:1}
+@media(max-width:650px){.meeting-back{margin-top:8px}.meeting-archive-row{padding:9px;gap:10px}.meeting-archive-row img,.meeting-archive-placeholder{width:58px;height:70px;flex-basis:58px}.meeting-archive-text strong{font-size:1rem}.meeting-archive-text small{font-size:.72rem}}
