@@ -13,7 +13,9 @@ async function query(p){const {data,error}=await p;if(error)throw error;return d
 async function load(){if(!db)return;try{[participants,books,meetings,attendance,draws]=await Promise.all([query(db.from('participants').select('*').order('name')),query(db.from('books').select('*').order('title')),query(db.from('meetings').select('*').order('starts_at',{ascending:false})),query(db.from('attendance').select('*')),query(db.from('draws').select('*').order('created_at'))]);render();}catch(e){notify('Não foi possível carregar os dados: '+e.message,true)}}
 function switchTab(t){document.querySelectorAll('.tab').forEach(el=>el.hidden=el.id!==`tab-${t}`);document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));}
 function render(){if(!admin&&$('coverManager')){$('coverManager').hidden=true;coverBookId=null;}document.querySelectorAll('.admin-only').forEach(el=>{if(!['meetingFormPanel','participantEditor','authPanel','coverManager'].includes(el.id))el.hidden=!admin});$('loginToggle').textContent=admin?'Admin · Sair':'Entrar como admin';renderMeetings();renderParticipants();renderDraws();if(currentMeeting)renderDetail(currentMeeting);}
-function isUpcoming(m){if(!m.starts_at)return false;const end=new Date(m.starts_at);end.setHours(23,59,59,999);return end>=new Date();}
+function localDay(value){if(!value)return null;const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(value));const get=type=>parts.find(part=>part.type===type)?.value||'';return `${get('year')}-${get('month')}-${get('day')}`;}
+function isPastMeeting(m){return !!m?.starts_at&&localDay(m.starts_at)<localDay(new Date());}
+function isUpcoming(m){return !!m?.starts_at&&!isPastMeeting(m);}
 function meetingBook(m){return books.find(b=>b.id===m?.book_id)||null}
 function meetingTitle(m){return meetingBook(m)?.title||m?.title||'Livro a definir'}
 function meetingBookWasRead(b){return !!b&&(!!b.read_by_club||meetings.some(m=>m.book_id===b.id&&m.starts_at&&!isUpcoming(m)))}
@@ -122,32 +124,30 @@ async function clearParticipantPhoto(id){
 }
 function participantEditor(p){if(!admin)return;$('participantEditor').hidden=false;$('participantId').value=p?.id||'';$('participantName').value=p?.name||'';const b=bookForParticipant(p);$('participantBook').value=b?.title||'';$('participantAuthor').value=b?.author||'';$('participantRead').checked=!!b?.read_by_club;$('participantReadWrap').hidden=!b;$('participantFormHeading').textContent=p?'Editar integrante e indicação':'Cadastrar integrante e livro';$('participantEditor').scrollIntoView({behavior:'smooth',block:'start'});}
 function renderDetail(id){const m=meetings.find(x=>x.id===id);if(!m)return;currentMeeting=id;const a=attendance.filter(x=>x.meeting_id===id);let detail=`<div class="panel"><div class="meeting-info"><div>${m.card_url?`<img class="meeting-banner" src="${safe(m.card_url)}" alt="Card do encontro">`:'<div class="placeholder">Encontro do Clube</div>'}</div><div><div class="eyebrow">NOSSO ENCONTRO</div><h2>${safe(meetingTitle(m))}</h2><p>${safe(fmt(m.starts_at))}</p><p><strong>Local:</strong> ${safe(m.place||'A definir')}</p>${hostsDetail(m)}<p><strong>Confirmadas:</strong> ${a.filter(x=>x.confirmed).length} · <strong>Presentes:</strong> ${a.filter(x=>x.checked_in).length}</p>${admin?`<button class="outline" data-edit-meeting="${safe(id)}">Editar encontro</button>`:''}</div></div></div>`;
-if(admin){
- const registered=participants.filter(p=>p.active||a.some(x=>x.participant_id===p.id));
- const present=a.filter(x=>x.checked_in).length, confirmed=a.filter(x=>x.confirmed).length;
+if(admin&&isPastMeeting(m)){
+ detail+=`<div class="panel archive-presence"><div class="eyebrow">ENCONTRO ANTERIOR</div><h3>Registro histórico</h3><p class="muted">O check-in está encerrado. Não é necessário cadastrar presenças dos encontros anteriores.</p></div>`;
+}else if(admin){
+ const confirmed=a.filter(x=>x.confirmed).length, present=a.filter(x=>x.checked_in).length;
  detail+=`<div class="panel attendance-panel">
-  <div class="attendance-heading"><div><h3>Presença no encontro</h3><p class="muted">Toque no nome para marcar ou desfazer o check-in.</p></div>
-  <div class="attendance-count"><strong>${present}</strong><span>presentes</span></div></div>
+  <div class="attendance-heading"><div><h3>${attendanceMode==='checkin'?'Check-in do encontro':'Confirmações do encontro'}</h3><p class="muted">${attendanceMode==='checkin'?'Toque na integrante confirmada para registrar a chegada.':'Marque quem confirmou participação antes do encontro.'}</p></div><div class="attendance-count"><strong>${attendanceMode==='checkin'?present:confirmed}</strong><span>${attendanceMode==='checkin'?'presentes':'confirmadas'}</span></div></div>
   <div class="attendance-modes" role="group" aria-label="Etapa de presença">
    <button type="button" class="${attendanceMode==='checkin'?'selected':''}" data-attendance-mode="checkin">Check-in</button>
    <button type="button" class="${attendanceMode==='confirmed'?'selected':''}" data-attendance-mode="confirmed">Confirmações <small>${confirmed}</small></button>
   </div>
-  <div class="attendance-tools">
-   <input id="attendanceSearch" type="search" placeholder="Buscar integrante..." aria-label="Buscar integrante" value="${safe(attendanceSearch)}">
-   ${attendanceMode==='checkin'?`<label class="attendance-filter"><input id="attendanceOnlyConfirmed" type="checkbox" ${attendanceOnlyConfirmed?'checked':''}> Só confirmadas</label>`:''}
-  </div>
-  <div class="attendance-summary">${confirmed} confirmadas · ${present} presentes · ${registered.length} integrantes</div>
+  <div class="attendance-tools"><input id="attendanceSearch" type="search" placeholder="Buscar integrante..." aria-label="Buscar integrante" value="${safe(attendanceSearch)}"></div>
+  <div class="attendance-summary">${confirmed} confirmadas · ${present} presentes</div>
+  ${attendanceMode==='checkin'?`<div class="attendance-bulk"><button type="button" class="outline" data-attendance-bulk="mark">✓ Marcar todas</button><button type="button" class="quiet" data-attendance-bulk="unmark">Desmarcar todas</button></div>`:''}
   <div id="attendanceRows" class="attendance-rows"></div>
  </div>`;
 }else{detail+=`<div class="panel"><h3>Confirmadas</h3><div class="rows">${a.filter(x=>x.confirmed).map(x=>{let p=participants.find(p=>p.id===x.participant_id);return p?`<div class="item"><strong>${safe(p.name)}</strong><span class="badge ${x.checked_in?'yes':''}">${x.checked_in?'Presente':'Confirmada'}</span></div>`:''}).join('')||'<p class="muted">Ainda sem confirmações.</p>'}</div></div>`;}
 $('meetingDetail').innerHTML=detail;$('meetingDetail').hidden=false;if(admin)renderAttendanceRows();}
 function renderAttendanceRows(){
- const root=$('attendanceRows');if(!root||!admin||!currentMeeting)return;
+ const root=$('attendanceRows');if(!root||!admin||!currentMeeting||isPastMeeting(meetings.find(m=>m.id===currentMeeting)))return;
  const rows=attendance.filter(a=>a.meeting_id===currentMeeting);
  const queryText=normalized(attendanceSearch);
  let people=participants.filter(p=>p.active||rows.some(r=>r.participant_id===p.id));
  if(queryText)people=people.filter(p=>normalized(p.name).includes(queryText));
- if(attendanceMode==='checkin'&&attendanceOnlyConfirmed)people=people.filter(p=>rows.some(r=>r.participant_id===p.id&&r.confirmed));
+ if(attendanceMode==='checkin')people=people.filter(p=>rows.some(r=>r.participant_id===p.id&&r.confirmed));
  people.sort((p,q)=>{
   if(attendanceMode==='checkin'){
    const a=rows.find(r=>r.participant_id===p.id),b=rows.find(r=>r.participant_id===q.id);
@@ -163,7 +163,7 @@ function renderAttendanceRows(){
    <span class="attendance-person-name">${safe(p.name)}</span>
    <span class="attendance-person-status">${flagged?'✓ '+(attendanceMode==='checkin'?'Presente':'Confirmada'):attendanceMode==='checkin'?'Marcar presença':'Confirmar'}</span>
   </button>`;
- }).join(''):'<p class="muted">Nenhuma integrante encontrada.</p>';
+ }).join(''):`<p class="muted">${attendanceMode==='checkin'?'Nenhuma confirmada encontrada. Vá à aba Confirmações para marcar as integrantes.':'Nenhuma integrante encontrada.'}</p>`;
 }
 function renderDraws(){
  const mid=$('drawMeeting').value||meetings[0]?.id;
@@ -181,13 +181,29 @@ function renderDraws(){
  $('resetDraws').hidden=!admin||!d.length;
  $('drawNote').textContent=accepted?'Resultado aceito e registrado para este encontro.':d.length?`${d.filter(x=>x.status==='skipped').length} sorteada(s) excluída(s) das próximas tentativas. Confirme quando a pessoa aceitar.`:'Participam todas as integrantes com check-in, mesmo sem livro indicado. A sorteada pode indicar o livro depois.';
 }
-async function saveAttendance(person,changes){let m=currentMeeting;if(!m)return;let old=attendance.find(x=>x.meeting_id===m&&x.participant_id===person);let row={meeting_id:m,participant_id:person,confirmed:old?.confirmed||false,checked_in:old?.checked_in||false,suggested_book_id:old?.suggested_book_id||participants.find(p=>p.id===person)?.suggested_book_id||null,...changes};if(row.checked_in)row.confirmed=true;if(!row.confirmed)row.checked_in=false;await query(db.from('attendance').upsert(row,{onConflict:'meeting_id,participant_id'}));await load();}
+async function saveAttendance(person,changes){let m=currentMeeting;if(!m)return;if(isPastMeeting(meetings.find(x=>x.id===m)))throw Error('O check-in de encontros anteriores está encerrado.');let old=attendance.find(x=>x.meeting_id===m&&x.participant_id===person);if(changes.checked_in===true&&!old?.confirmed)throw Error('Somente participantes confirmadas podem fazer check-in.');let row={meeting_id:m,participant_id:person,confirmed:old?.confirmed||false,checked_in:old?.checked_in||false,suggested_book_id:old?.suggested_book_id||participants.find(p=>p.id===person)?.suggested_book_id||null,...changes};if(row.checked_in)row.confirmed=true;if(!row.confirmed)row.checked_in=false;await query(db.from('attendance').upsert(row,{onConflict:'meeting_id,participant_id'}));await load();}
+async function bulkCheckIn(mark){
+ if(!admin||attendanceSaving||attendanceMode!=='checkin')return;
+ const m=meetings.find(x=>x.id===currentMeeting);
+ if(!m||isPastMeeting(m))return;
+ const rows=attendance.filter(x=>x.meeting_id===m.id&&x.confirmed);
+ const updates=rows.filter(x=>!!x.checked_in!==mark).map(x=>({
+  meeting_id:m.id,participant_id:x.participant_id,confirmed:true,checked_in:mark,
+  suggested_book_id:x.suggested_book_id||participants.find(p=>p.id===x.participant_id)?.suggested_book_id||null
+ }));
+ if(!updates.length){notify(mark?'Todas as confirmadas já estão presentes.':'Todas as presenças já estão desmarcadas.');return;}
+ if(!confirm(mark?`Marcar presença de ${updates.length} integrante(s) confirmada(s)?`:`Desmarcar presença de ${updates.length} integrante(s)?`))return;
+ attendanceSaving=true;renderAttendanceRows();
+ try{await query(db.from('attendance').upsert(updates,{onConflict:'meeting_id,participant_id'}));await load();}
+ catch(err){notify(err.message,true);await load();}
+ finally{attendanceSaving=false;renderAttendanceRows();}
+}
 function meetingEditor(m){
  $('meetingFormPanel').hidden=false;
  $('meetingId').value=m?.id||'';
  const chosen=m?.book_id||books.find(b=>normalized(b.title)===normalized(m?.title||''))?.id||'';
  const bookSelect=$('meetingBook');
- bookSelect.innerHTML='<option value="">Livro a definir · escolher depois</option>'+books.map(b=>`<option value="${safe(b.id)}">${safe(b.title)}${b.author?' — '+safe(b.author):''}</option>`).join('');
+ bookSelect.innerHTML='<option value="">Livro a definir · escolher depois</option>'+[...books].sort((a,b)=>a.title.localeCompare(b.title,'pt-BR')).map(b=>`<option value="${safe(b.id)}">${safe(b.title)}${b.author?' — '+safe(b.author):''}</option>`).join('');
  bookSelect.value=chosen;
  if(m?.title&&!chosen&&normalized(m.title)!=='livro a definir'){
    const legacy=document.createElement('option');legacy.value='legacy';legacy.textContent=m.title+' (título antigo — selecione o livro cadastrado)';bookSelect.appendChild(legacy);bookSelect.value='legacy';
@@ -377,11 +393,12 @@ async function deleteParticipant(id){
 }
 document.body.addEventListener('click',async e=>{
  const mode=e.target.closest('[data-attendance-mode]');
- if(mode&&admin){attendanceMode=mode.dataset.attendanceMode;renderDetail(currentMeeting);return}
+ if(mode&&admin&&!isPastMeeting(meetings.find(m=>m.id===currentMeeting))){attendanceMode=mode.dataset.attendanceMode;renderDetail(currentMeeting);return}
  const person=e.target.closest('[data-attendance-person]');
- if(!person||!admin||attendanceSaving)return;
+ if(!person||!admin||attendanceSaving||isPastMeeting(meetings.find(m=>m.id===currentMeeting)))return;
  const pid=person.dataset.attendancePerson;
  const old=attendance.find(x=>x.meeting_id===currentMeeting&&x.participant_id===pid);
+ if(attendanceMode==='checkin'&&!old?.confirmed)return;
  const field=attendanceMode==='checkin'?'checked_in':'confirmed';
  attendanceSaving=true;person.disabled=true;
  try{
@@ -389,13 +406,11 @@ document.body.addEventListener('click',async e=>{
  }catch(err){notify(err.message,true);await load()}
  finally{attendanceSaving=false;renderAttendanceRows()}
 });
+document.body.addEventListener('click',e=>{const btn=e.target.closest('[data-attendance-bulk]');if(btn&&admin)bulkCheckIn(btn.dataset.attendanceBulk==='mark');});
 document.body.addEventListener('input',e=>{
  if(e.target.id!=='attendanceSearch')return;
  attendanceSearch=e.target.value;renderAttendanceRows();
  const el=$('attendanceSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}
-});
-document.body.addEventListener('change',e=>{
- if(e.target.id==='attendanceOnlyConfirmed'){attendanceOnlyConfirmed=e.target.checked;renderAttendanceRows()}
 });
 document.body.addEventListener('click',async e=>{let t=e.target.closest('[data-open],[data-edit-meeting],[data-active],[data-edit-participant],[data-delete-participant],[data-cover-book],[data-choose-cover]');if(!t)return;try{
  if(t.dataset.coverBook){await openCoverSearch(t.dataset.coverBook);return}
