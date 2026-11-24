@@ -229,8 +229,10 @@ function renderAttendanceRows(){
  root.innerHTML=people.length?people.map(p=>{
   const row=rows.find(r=>r.participant_id===p.id);
   const flagged=attendanceMode==='checkin'?!!row?.checked_in:!!row?.confirmed;
+  const src=photoUrl(p);
+  const avatar=src?`<img src="${safe(src)}" loading="lazy" alt="" referrerpolicy="no-referrer" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="attendance-avatar-initials" hidden>${safe(initialsFor(p.name))}</span>`:`<span class="attendance-avatar-initials">${safe(initialsFor(p.name))}</span>`;
   return `<button type="button" class="attendance-person ${flagged?'marked':''}" data-attendance-person="${safe(p.id)}" aria-pressed="${flagged}" ${attendanceSaving?'disabled':''}>
-   <span class="attendance-person-name">${safe(p.name)}</span>
+   <span class="attendance-person-identity"><span class="attendance-avatar" aria-hidden="true">${avatar}</span><span class="attendance-person-name">${safe(p.name)}</span></span>
    <span class="attendance-person-status">${flagged?'✓ '+(attendanceMode==='checkin'?'Presente':'Confirmada'):attendanceMode==='checkin'?'Marcar presença':'Confirmar'}</span>
   </button>`;
  }).join(''):`<p class="muted">${attendanceMode==='checkin'?'Nenhuma confirmada encontrada. Vá à aba Confirmações para marcar as integrantes.':'Nenhuma integrante encontrada.'}</p>`;
@@ -402,19 +404,30 @@ async function runDraw(){
  rolling=true;$('drawBtn').disabled=true;$('acceptBtn').hidden=true;
  $('drawDisplay').classList.remove('accepted');$('drawDisplay').classList.add('drawing');
  $('rollingBook').textContent='';
+ // A escolha é feita ANTES da animação para garantir que a última foto
+ // exibida seja exatamente a da pessoa que será registrada no sorteio.
+ const bytes=new Uint32Array(1);crypto.getRandomValues(bytes);
+ const pick=eligible[bytes[0]%eligible.length];
+ const winner=participants.find(p=>p.id===pick.participant_id);
  const faces=eligible.map(a=>participants.find(p=>p.id===a.participant_id)).filter(Boolean);
- let spinIndex=0;
- const spin=()=>{setDrawPerson(faces[spinIndex%faces.length],false);spinIndex++};
- spin();const interval=setInterval(spin,340);
+ const otherFaces=faces.filter(p=>p.id!==winner.id);
+ let spinIndex=0,interval=null;
+ const spin=()=>{
+  const face=otherFaces.length?otherFaces[spinIndex%otherFaces.length]:winner;
+  setDrawPerson(face,false);spinIndex++;
+ };
+ spin();
+ interval=setInterval(spin,125);
  try{
-  await new Promise(resolve=>setTimeout(resolve,4200));clearInterval(interval);
-  const bytes=new Uint32Array(1);crypto.getRandomValues(bytes);
-  const pick=eligible[bytes[0]%eligible.length];
+  await new Promise(resolve=>setTimeout(resolve,2550));
+  clearInterval(interval);interval=null;
+  setDrawPerson(winner,false);
+  await new Promise(resolve=>setTimeout(resolve,420));
   const lastPending=previous.filter(d=>d.status==='pending').at(-1);
   if(lastPending)await query(db.from('draws').update({status:'skipped'}).eq('id',lastPending.id));
   await query(db.from('draws').insert({meeting_id:mid,participant_id:pick.participant_id,book_id:pick.suggested_book_id||participants.find(p=>p.id===pick.participant_id)?.suggested_book_id||null,status:'pending'}));
   await load();
- }catch(e){clearInterval(interval);notify(e.message,true);await load()}
+ }catch(e){if(interval)clearInterval(interval);notify(e.message,true);await load()}
  finally{rolling=false;$('drawBtn').disabled=false;$('drawDisplay').classList.remove('drawing')}
 }
 // A indicação posterior atualiza o sorteio aceito e o rascunho ligado a ele,

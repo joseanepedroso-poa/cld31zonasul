@@ -329,3 +329,17 @@ button.member-avatar-button > .member-initials {line-height:normal}
 .public-draw-attempts>summary{cursor:pointer;font-size:.8rem;color:#845c70}
 .public-draw-attempts p{font-size:.78rem;margin:6px 0}
 @media(max-width:650px){.public-draw-result{padding:22px 12px}.public-draw-head h2{font-size:1.38rem}.public-draw-result .draw-photo{width:108px;height:108px}}
+
+/* v2.5: exclusões abaixo do histórico de sorteio */
+#drawAdminView > .draw-excluded {margin-top:12px;padding:14px 18px;border:1px solid var(--line);border-radius:14px;background:#fcf7f8}
+#drawAdminView > .draw-excluded[hidden]{display:none}
+
+/* v2.5.1 — retratos nas listas de confirmações e check-in */
+.attendance-person-identity{display:flex;align-items:center;gap:11px;min-width:0;flex:1}
+.attendance-person-name{min-width:0;overflow-wrap:anywhere}
+.attendance-avatar{display:grid;place-items:center;width:43px;height:43px;flex:0 0 43px;overflow:hidden;border-radius:50%;background:#ecd8e1;border:2px solid #f5e7ed;box-sizing:border-box;color:#86556b}
+.attendance-avatar img{display:block;width:100%;height:100%;object-fit:cover;object-position:center;border-radius:50%;padding:0;margin:0}
+.attendance-avatar img[hidden]{display:none}
+.attendance-avatar-initials{font-size:.76rem;font-weight:700;line-height:1}
+.attendance-avatar-initials[hidden]{display:none}
+@media(max-width:650px){.attendance-avatar{width:40px;height:40px;flex-basis:40px}.attendance-person-identity{gap:9px}.attendance-person-status{font-size:.72rem}}
