@@ -2,7 +2,8 @@
 const $=id=>document.getElementById(id), cfg=window.CLUBE_CONFIG||{};
 const configured=!!(cfg.supabaseUrl&&cfg.supabasePublishableKey&&window.supabase);
 const db=configured?window.supabase.createClient(cfg.supabaseUrl,cfg.supabasePublishableKey):null;
-let admin=false,participants=[],books=[],meetings=[],attendance=[],draws=[],currentMeeting=null,rolling=false;
+let admin=false,participants=[],books=[],meetings=[],attendance=[],draws=[],meetingPhotos=[],currentMeeting=null,rolling=false;
+let uploadingMeetingPhotos=false;
 let coverBookId=null,coverBusy=false,coverOptions=[];
 let attendanceMode='checkin', attendanceSearch='', attendanceOnlyConfirmed=false, attendanceSaving=false;
 let photoTargetId=null,photoSaving=false;
@@ -11,7 +12,7 @@ const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'
 const fmt=x=>x?new Date(x).toLocaleString('pt-BR',{dateStyle:'medium',timeStyle:'short'}):'Data a definir';
 function notify(s,error=false){const el=$('message');el.textContent=s;el.className='notice'+(error?' error':'');el.hidden=false;window.scrollTo({top:0,behavior:'smooth'});}
 async function query(p){const {data,error}=await p;if(error)throw error;return data}
-async function load(){if(!db)return;try{[participants,books,meetings,attendance,draws]=await Promise.all([query(db.from('participants').select('*').order('name')),query(db.from('books').select('*').order('title')),query(db.from('meetings').select('*').order('starts_at',{ascending:false})),query(db.from('attendance').select('*')),query(db.from('draws').select('*').order('created_at'))]);render();}catch(e){notify('Não foi possível carregar os dados: '+e.message,true)}}
+async function load(){if(!db)return;try{[participants,books,meetings,attendance,draws,meetingPhotos]=await Promise.all([query(db.from('participants').select('*').order('name')),query(db.from('books').select('*').order('title')),query(db.from('meetings').select('*').order('starts_at',{ascending:false})),query(db.from('attendance').select('*')),query(db.from('draws').select('*').order('created_at')),query(db.from('meeting_photos').select('*').order('created_at',{ascending:true}))]);render();}catch(e){notify('Não foi possível carregar os dados: '+e.message,true)}}
 function switchTab(t){document.querySelectorAll('.tab').forEach(el=>el.hidden=el.id!==`tab-${t}`);document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));if(t==='encontros'&&meetingScreen!=='home'){showMeetingScreen('home');}}
 function showMeetingScreen(screen,back=null){
  if(back)meetingReturnScreen=back;
@@ -235,6 +236,74 @@ function participantEditor(p){
  $('participantFormHeading').textContent=p?'Editar integrante e indicação':'Cadastrar integrante e livro';
  refreshParticipantCoverControls();$('participantEditor').scrollIntoView({behavior:'smooth',block:'start'});
 }
+// Galeria: os arquivos otimizados ficam em Storage; no banco guardamos apenas metadados.
+function meetingPhotoUrl(item){return db.storage.from('meeting-gallery').getPublicUrl(item.storage_path).data.publicUrl}
+function galleryMarkup(mid){
+ const images=meetingPhotos.filter(x=>x.meeting_id===mid);
+ return `<section class="panel meeting-gallery"><div class="gallery-heading"><div><div class="eyebrow">MOMENTOS DO NOSSO GRUPO</div><h3>Fotos do encontro</h3></div>${images.length?`<span class="gallery-count">${images.length} foto${images.length===1?'':'s'}</span>`:''}</div>
+ ${images.length?`<div class="gallery-grid">${images.map((item,i)=>`<div class="gallery-item"><button type="button" class="gallery-photo" data-open-gallery="${safe(item.id)}" aria-label="Ampliar foto ${i+1} do encontro"><img src="${safe(meetingPhotoUrl(item))}" alt="Foto ${i+1} do encontro" loading="lazy" decoding="async"></button>${admin?`<button type="button" class="gallery-delete" data-delete-gallery="${safe(item.id)}" aria-label="Excluir foto ${i+1}">×</button>`:''}</div>`).join('')}</div>`:'<p class="muted gallery-empty">As fotos deste encontro aparecerão aqui.</p>'}
+ ${admin?`<div class="gallery-upload"><label for="galleryUpload">Adicionar fotos do encontro</label><input type="file" id="galleryUpload" accept="image/jpeg,image/png,image/webp" multiple><p class="muted">Até 10 fotos por vez. O site reduz automaticamente as imagens antes de enviar. Apenas a administração pode adicionar ou excluir.</p><button type="button" class="outline" id="galleryUploadButton" ${uploadingMeetingPhotos?'disabled':''}>${uploadingMeetingPhotos?'Enviando fotos...':'Enviar fotos selecionadas'}</button><p id="galleryUploadStatus" role="status" class="muted" aria-live="polite"></p></div>`:''}</section>`;
+}
+async function optimizedMeetingPhoto(file){
+ if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw Error('Use fotos JPG, PNG ou WebP.');
+ if(file.size>20*1024*1024)throw Error('A foto original deve ter até 20 MB.');
+ const bitmap=await createImageBitmap(file);
+ try{
+  const width=bitmap.width,height=bitmap.height;
+  if(!width||!height)throw Error('Imagem inválida.');
+  const scale=Math.min(1,1600/Math.max(width,height));
+  const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(width*scale));canvas.height=Math.max(1,Math.round(height*scale));
+  const ctx=canvas.getContext('2d');if(!ctx)throw Error('Não foi possível preparar a foto.');
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.79));
+  if(!blob)throw Error('Não foi possível comprimir a foto.');
+  if(blob.size>4*1024*1024)throw Error('A foto ficou muito grande mesmo após compressão.');
+  return blob;
+ }finally{bitmap.close();}
+}
+async function uploadMeetingGallery(){
+ if(!admin||!currentMeeting||uploadingMeetingPhotos)return;
+ const input=$('galleryUpload');const files=[...(input?.files||[])];
+ if(!files.length){notify('Selecione uma ou mais fotos.',true);return;}
+ if(files.length>10){notify('Selecione até 10 fotos por envio.',true);return;}
+ uploadingMeetingPhotos=true;
+ const button=$('galleryUploadButton'),status=$('galleryUploadStatus');
+ if(button){button.disabled=true;button.textContent='Enviando fotos...';}
+ let saved=0;
+ try{
+  for(const file of files){
+   if(status)status.textContent=`Preparando foto ${saved+1} de ${files.length}...`;
+   const optimized=await optimizedMeetingPhoto(file);
+   const path=`${currentMeeting}/${crypto.randomUUID()}.jpg`;
+   await query(db.storage.from('meeting-gallery').upload(path,optimized,{contentType:'image/jpeg',upsert:false,cacheControl:'3600'}));
+   try{await query(db.from('meeting_photos').insert({meeting_id:currentMeeting,storage_path:path}));}
+   catch(err){await db.storage.from('meeting-gallery').remove([path]);throw err;}
+   saved++;
+  }
+  await load();
+  if(currentMeeting){renderDetail(currentMeeting);}
+  const latest=$('galleryUploadStatus');if(latest)latest.textContent=`${saved} foto${saved===1?' enviada':'s enviadas'} com sucesso.`;
+ }catch(err){if(saved)await load();notify(`${saved} foto(s) salva(s). Não foi possível concluir: ${err.message}`,true);}
+ finally{uploadingMeetingPhotos=false;const b=$('galleryUploadButton');if(b){b.disabled=false;b.textContent='Enviar fotos selecionadas';}}
+}
+async function deleteMeetingGallery(id){
+ if(!admin)return;
+ const item=meetingPhotos.find(x=>x.id===id);if(!item)return;
+ if(!confirm('Excluir esta foto do encontro? Essa ação não pode ser desfeita.'))return;
+ try{
+  await query(db.from('meeting_photos').delete().eq('id',id));
+  const {error}=await db.storage.from('meeting-gallery').remove([item.storage_path]);
+  if(error)console.warn('Não foi possível limpar o arquivo antigo:',error.message);
+  await load();
+ }catch(err){notify('Não foi possível excluir a foto: '+err.message,true);}
+}
+function openGalleryPhoto(id){
+ const item=meetingPhotos.find(x=>x.id===id);if(!item)return;
+ const modal=$('galleryModal');$('galleryFullImage').src=meetingPhotoUrl(item);
+ $('galleryFullImage').alt='Foto ampliada do encontro';modal.hidden=false;document.body.classList.add('gallery-modal-open');
+ $('galleryClose').focus({preventScroll:true});
+}
+function closeGalleryPhoto(){const modal=$('galleryModal');if(modal.hidden)return;modal.hidden=true;$('galleryFullImage').removeAttribute('src');document.body.classList.remove('gallery-modal-open');}
 function renderDetail(id){const m=meetings.find(x=>x.id===id);if(!m)return;currentMeeting=id;const a=attendance.filter(x=>x.meeting_id===id);let detail=`<div class="panel"><div class="meeting-info"><div>${m.card_url?`<img class="meeting-banner" src="${safe(m.card_url)}" alt="Card do encontro">`:'<div class="placeholder">Encontro do Clube</div>'}</div><div><div class="eyebrow">NOSSO ENCONTRO</div><h2>${safe(meetingTitle(m))}</h2><p>${safe(fmt(m.starts_at))}</p><p><strong>Local:</strong> ${safe(m.place||'A definir')}</p>${hostsDetail(m)}<p><strong>Confirmadas:</strong> ${a.filter(x=>x.confirmed).length} · <strong>Presentes:</strong> ${a.filter(x=>x.checked_in).length}</p>${admin?`<button class="outline" data-edit-meeting="${safe(id)}">Editar encontro</button>`:''}</div></div></div>`;
 if(admin&&isPastMeeting(m)){
  detail+=`<div class="panel archive-presence"><div class="eyebrow">ENCONTRO ANTERIOR</div><h3>Registro histórico</h3><p class="muted">O check-in está encerrado. Não é necessário cadastrar presenças dos encontros anteriores.</p></div>`;
@@ -254,7 +323,7 @@ if(admin&&isPastMeeting(m)){
 }else{const confirmedPeople=a.filter(x=>x.confirmed).map(x=>participants.find(p=>p.id===x.participant_id)).filter(Boolean);
  const empty=isPastMeeting(m)?'<p class="muted">0 participantes</p>':'<p class="muted">Ainda sem confirmações.</p>';
  detail+=`<div class="panel"><h3>Confirmadas</h3><div class="rows confirmed-people">${confirmedPeople.map(p=>`<div class="public-confirmed">${participantAvatar(p)}<strong>${safe(p.name)}</strong></div>`).join('')||empty}</div></div>`;}
-$('meetingDetail').innerHTML=detail;$('meetingDetail').hidden=false;if(admin)renderAttendanceRows();}
+detail+=galleryMarkup(id);$('meetingDetail').innerHTML=detail;$('meetingDetail').hidden=false;if(admin)renderAttendanceRows();}
 function renderAttendanceRows(){
  const root=$('attendanceRows');if(!root||!admin||!currentMeeting||isPastMeeting(meetings.find(m=>m.id===currentMeeting)))return;
  const rows=attendance.filter(a=>a.meeting_id===currentMeeting);
@@ -698,3 +767,12 @@ document.addEventListener('click',event=>{
  }
 },true);
 document.addEventListener('keydown',event=>{if(event.key==='Escape')closePhoto()});
+
+// Galeria dos encontros — controles disponíveis nas telas de detalhes.
+document.body.addEventListener('click',async e=>{
+ if(e.target.closest('#galleryUploadButton')){await uploadMeetingGallery();return;}
+ const del=e.target.closest('[data-delete-gallery]');if(del){await deleteMeetingGallery(del.dataset.deleteGallery);return;}
+ const open=e.target.closest('[data-open-gallery]');if(open){openGalleryPhoto(open.dataset.openGallery);return;}
+ if(e.target.closest('#galleryClose')||e.target.id==='galleryModal'){closeGalleryPhoto();return;}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('galleryModal')&&!$('galleryModal').hidden)closeGalleryPhoto();});
