@@ -154,37 +154,47 @@ body.photo-open{overflow:hidden}
 .member-avatar-button img{pointer-events:none}
 @media(max-width:650px){.photo-overlay{padding:12px}.photo-overlay-content{max-width:100%;max-height:calc(100dvh - 24px)}.photo-overlay-content img{max-height:calc(100dvh - 100px)}}
 
-/* v1.6.3 — recorte circular real também para fotos clicáveis no celular */
-.member-avatar,
-.member-avatar-button {
-  position: relative;
-  display: block;
-  padding: 0 !important;
-  overflow: hidden;
-  border-radius: 50% !important;
-  aspect-ratio: 1 / 1;
-  min-width: 0;
-  min-height: 0;
-  flex-shrink: 0;
+/* v1.6.4 — correção: .item button aplicava padding interno à foto.
+   O recorte pertence ao botão e a foto preenche toda a área útil. */
+.item button.member-avatar-button,
+button.member-avatar-button {
+  appearance: none;
+  -webkit-appearance: none;
   box-sizing: border-box;
+  width: 68px;
+  height: 68px;
+  flex: 0 0 68px;
+  min-width: 68px;
+  min-height: 68px;
+  padding: 0 !important;
+  margin: 0;
+  border: 3px solid #f5e7ed;
+  border-radius: 50% !important;
+  display: block;
+  overflow: hidden;
+  background: #f5e7ed;
+  cursor: zoom-in;
+  touch-action: manipulation;
+  line-height: 0;
+  position: relative;
 }
-.member-avatar > img,
-.member-avatar-button > img {
-  position: absolute;
-  inset: 0;
+.item button.member-avatar-button > img,
+button.member-avatar-button > img {
+  display: block;
   width: 100% !important;
   height: 100% !important;
   max-width: none !important;
   max-height: none !important;
   object-fit: cover !important;
-  object-position: center center;
+  object-position: center;
   border-radius: 50%;
-  display: block;
+  padding: 0 !important;
+  margin: 0;
+  pointer-events: none;
 }
-.member-avatar > .member-initials {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
+button.member-avatar-button > .member-initials {line-height:normal}
+@media(max-width:650px){
+  .item button.member-avatar-button,button.member-avatar-button {
+    width:54px;height:54px;flex-basis:54px;min-width:54px;min-height:54px;border-width:2px;
+  }
 }
-.member-avatar > .member-initials[hidden] { display: none; }
