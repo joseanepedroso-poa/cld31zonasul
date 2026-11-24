@@ -63,7 +63,7 @@ function photoUrl(person){
  if(!src)return '';
  try{let u=new URL(src);return u.protocol==='https:'?u.href:''}catch{return ''}
 }
-function participantAvatar(p){const src=photoUrl(p);return `<div class="member-avatar">${src?`<img loading="lazy" src="${safe(src)}" alt="Foto de ${safe(p.name)}" referrerpolicy="no-referrer" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="member-initials" hidden aria-hidden="true">${safe(initialsFor(p.name))}</span>`:`<span class="member-initials" aria-hidden="true">${safe(initialsFor(p.name))}</span>`}</div>`}
+function participantAvatar(p){const src=photoUrl(p);const inner=src?`<img loading="lazy" src="${safe(src)}" alt="Foto de ${safe(p.name)}" referrerpolicy="no-referrer" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="member-initials" hidden aria-hidden="true">${safe(initialsFor(p.name))}</span>`:`<span class="member-initials" aria-hidden="true">${safe(initialsFor(p.name))}</span>`;return src?`<button type="button" class="member-avatar member-avatar-button" data-enlarge-photo="${safe(p.id)}" aria-label="Ampliar foto de ${safe(p.name)}" title="Ver foto inteira">${inner}</button>`:`<div class="member-avatar">${inner}</div>`}
 function renderParticipants(){
  const visible=admin?participants:participants.filter(p=>p.active);
  $('participantList').innerHTML=visible.length?visible.map(p=>{
@@ -73,7 +73,7 @@ function renderParticipants(){
     <div class="member-details">
       <strong class="member-name">${safe(p.name)}</strong>
       ${b?`<div class="member-book"><div class="member-book-cover">${bookCover(b)}</div><div class="member-book-details"><span class="member-book-title">${safe(b.title)}</span>${b.author?`<span class="member-book-author">${safe(b.author)}</span>`:''}${bookStatus(b)}</div></div>`:'<div class="member-empty">Livro ainda não indicado</div>'}
-      ${admin?`<div class="member-activity">${p.active?'Ativa':'Inativa'}</div>`:''}
+      
     </div>
    </div>
    ${admin?`<div class="right member-actions"><button class="outline" data-edit-participant="${safe(p.id)}">Editar</button><button class="quiet" data-photo-person="${safe(p.id)}">${photoUrl(p)?'Trocar foto':'Adicionar foto'}</button>${photoUrl(p)?`<button class="quiet" data-remove-photo="${safe(p.id)}">Remover foto</button>`:''}${b?`<button class="quiet" data-cover-book="${safe(b.id)}">Capa</button>`:''}<button class="quiet" data-active="${safe(p.id)}">${p.active?'Desativar':'Reativar'}</button><button class="danger" data-delete-participant="${safe(p.id)}" aria-label="Excluir ${safe(p.name)}">Excluir</button></div>`:''}</div>`
@@ -414,3 +414,18 @@ $('resetDraws').onclick=async()=>{if(!admin||rolling)return;if(!confirm('Atenç�
 if(db){await checkAdmin();await load()}}
 async function checkAdmin(){const {data}=await db.auth.getUser();const user=data?.user;admin=false;if(user){try{const rows=await query(db.from('admins').select('user_id').eq('user_id',user.id));admin=rows.length>0}catch(e){console.warn(e)}}render()}
 initial();
+
+// Visualização ampliada da foto, disponível também sem login
+document.addEventListener('click',e=>{
+ const button=e.target.closest('[data-enlarge-photo]');
+ if(!button)return;
+ const person=participants.find(p=>p.id===button.dataset.enlargePhoto);
+ const image=photoUrl(person);if(!image)return;
+ $('photoFull').src=image; $('photoFull').alt=`Foto de ${person.name}`;
+ $('photoFullName').textContent=person.name;
+ const modal=$('photoModal'); if(typeof modal.showModal==='function')modal.showModal();
+ else modal.setAttribute('open','');
+});
+document.addEventListener('click',e=>{
+ if(e.target.id==='photoClose'||e.target.id==='photoModal')$('photoModal').close();
+});
