@@ -42,7 +42,7 @@ function openMeetingScreen(id){
  renderDetail(id);showMeetingScreen('detail');window.scrollTo({top:0,behavior:'smooth'});
 }
 
-function render(){if(!admin&&$('coverManager')){$('coverManager').hidden=true;coverBookId=null;}document.querySelectorAll('.admin-only').forEach(el=>{if(!['meetingFormPanel','participantEditor','authPanel','coverManager'].includes(el.id))el.hidden=!admin});$('loginToggle').setAttribute('aria-label',admin?'Abrir opções administrativas':'Entrar como administrador');$('loginToggle').title=admin?'Opções administrativas':'Entrar como administrador';$('logout').hidden=!admin;$('loginForm').hidden=admin;renderMeetings();renderParticipants();renderDraws();if(currentMeeting)renderDetail(currentMeeting);}
+function render(){if(!admin&&$('coverManager')){$('coverManager').hidden=true;coverBookId=null;}document.querySelectorAll('.admin-only').forEach(el=>{if(!['meetingFormPanel','participantEditor','authPanel','coverManager'].includes(el.id))el.hidden=!admin});$('adminIndicator').hidden=!admin;$('loginToggle').setAttribute('aria-label',admin?'Abrir opções administrativas':'Entrar como administrador');$('loginToggle').title=admin?'Opções administrativas':'Entrar como administrador';$('logout').hidden=!admin;$('loginForm').hidden=admin;renderMeetings();renderParticipants();renderDraws();if(currentMeeting)renderDetail(currentMeeting);}
 function localDay(value){if(!value)return null;const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(value));const get=type=>parts.find(part=>part.type===type)?.value||'';return `${get('year')}-${get('month')}-${get('day')}`;}
 function isPastMeeting(m){return !!m?.starts_at&&localDay(m.starts_at)<localDay(new Date());}
 function isUpcoming(m){return !!m?.starts_at&&!isPastMeeting(m);}
@@ -262,14 +262,8 @@ function renderAttendanceRows(){
  let people=participants.filter(p=>p.active||rows.some(r=>r.participant_id===p.id));
  if(queryText)people=people.filter(p=>normalized(p.name).includes(queryText));
  if(attendanceMode==='checkin')people=people.filter(p=>rows.some(r=>r.participant_id===p.id&&r.confirmed));
- people.sort((p,q)=>{
-  if(attendanceMode==='checkin'){
-   const a=rows.find(r=>r.participant_id===p.id),b=rows.find(r=>r.participant_id===q.id);
-   const priority=x=>x?.checked_in?0:x?.confirmed?1:2;
-   if(priority(a)!==priority(b))return priority(a)-priority(b);
-  }
-  return p.name.localeCompare(q.name,'pt-BR');
- });
+ // Ordem alfabética estável, independentemente de check-in ou confirmação.
+ people.sort((p,q)=>p.name.localeCompare(q.name,'pt-BR'));
  root.innerHTML=people.length?people.map(p=>{
   const row=rows.find(r=>r.participant_id===p.id);
   const flagged=attendanceMode==='checkin'?!!row?.checked_in:!!row?.confirmed;

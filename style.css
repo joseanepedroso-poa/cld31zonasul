@@ -360,3 +360,12 @@ button.member-avatar-button > .member-initials {line-height:normal}
 .meeting-archive-text small{font-size:.77rem;color:var(--sub);line-height:1.3}
 .meeting-archive-chevron{font-size:1.65rem;color:var(--wine);line-height:1}
 @media(max-width:650px){.meeting-back{margin-top:8px}.meeting-archive-row{padding:9px;gap:10px}.meeting-archive-row img,.meeting-archive-placeholder{width:58px;height:70px;flex-basis:58px}.meeting-archive-text strong{font-size:1rem}.meeting-archive-text small{font-size:.72rem}}
+
+/* v2.8 — ações administrativas menores e indicador discreto de sessão */
+#newMeeting{background:transparent!important;color:var(--wine)!important;border:1px solid var(--line)!important;border-radius:9px!important;padding:7px 11px!important;font-size:.76rem!important;line-height:1.25!important;font-weight:650!important;width:auto!important;max-width:max-content!important;flex:0 0 auto!important;box-shadow:none!important;white-space:nowrap!important}
+#newMeeting:hover:not(:disabled){background:var(--rose)!important}
+.admin-access{display:flex;flex:0 0 auto;align-items:center;justify-content:center;flex-direction:column;gap:3px;align-self:flex-start}
+.admin-indicator{display:inline-flex;align-items:center;gap:4px;font-size:.61rem;line-height:1.2;font-weight:650;letter-spacing:.015em;color:#fff;white-space:nowrap}
+.admin-indicator[hidden]{display:none!important}
+.admin-indicator-dot{width:7px;height:7px;border-radius:50%;background:#a7ebbe;box-shadow:0 0 0 2px #ffffff25}
+@media(max-width:650px){#newMeeting{font-size:.7rem!important;padding:6px 8px!important}.admin-access{gap:2px}.admin-indicator{font-size:.56rem}.sectionhead{align-items:center}}
