@@ -3,15 +3,18 @@ const $=id=>document.getElementById(id), cfg=window.CLUBE_CONFIG||{};
 const configured=!!(cfg.supabaseUrl&&cfg.supabasePublishableKey&&window.supabase);
 const db=configured?window.supabase.createClient(cfg.supabaseUrl,cfg.supabasePublishableKey):null;
 let admin=false,participants=[],books=[],meetings=[],attendance=[],draws=[],currentMeeting=null,rolling=false;
+let coverBookId=null,coverBusy=false,coverOptions=[];
 const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=x=>x?new Date(x).toLocaleString('pt-BR',{dateStyle:'medium',timeStyle:'short'}):'Data a definir';
 function notify(s,error=false){const el=$('message');el.textContent=s;el.className='notice'+(error?' error':'');el.hidden=false;window.scrollTo({top:0,behavior:'smooth'});}
 async function query(p){const {data,error}=await p;if(error)throw error;return data}
 async function load(){if(!db)return;try{[participants,books,meetings,attendance,draws]=await Promise.all([query(db.from('participants').select('*').order('name')),query(db.from('books').select('*').order('title')),query(db.from('meetings').select('*').order('starts_at',{ascending:false})),query(db.from('attendance').select('*')),query(db.from('draws').select('*').order('created_at'))]);render();}catch(e){notify('Não foi possível carregar os dados: '+e.message,true)}}
 function switchTab(t){document.querySelectorAll('.tab').forEach(el=>el.hidden=el.id!==`tab-${t}`);document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));}
-function render(){document.querySelectorAll('.admin-only').forEach(el=>{if(!['meetingFormPanel','participantEditor','authPanel'].includes(el.id))el.hidden=!admin});$('loginToggle').textContent=admin?'Admin · Sair':'Entrar como admin';renderMeetings();renderParticipants();renderDraws();if(currentMeeting)renderDetail(currentMeeting);}
+function render(){if(!admin&&$('coverManager')){$('coverManager').hidden=true;coverBookId=null;}document.querySelectorAll('.admin-only').forEach(el=>{if(!['meetingFormPanel','participantEditor','authPanel','coverManager'].includes(el.id))el.hidden=!admin});$('loginToggle').textContent=admin?'Admin · Sair':'Entrar como admin';renderMeetings();renderParticipants();renderDraws();if(currentMeeting)renderDetail(currentMeeting);}
 function isUpcoming(m){if(!m.starts_at)return false;const end=new Date(m.starts_at);end.setHours(23,59,59,999);return end>=new Date();}
-function meetingCard(m,featured=false){const count=attendance.filter(a=>a.meeting_id===m.id&&a.confirmed).length;return `<article class="meeting-card ${featured?'featured':''}">${m.card_url?`<img src="${safe(m.card_url)}" alt="Card de divulgação do encontro" loading="lazy">`:'<div class="placeholder">Card do encontro em breve</div>'}<div class="content"><div class="eyebrow">${featured?'PRÓXIMA LEITURA':'ENCONTRO'}</div><h3>${safe(m.title||'Livro a definir')}</h3><div class="meta">${safe(fmt(m.starts_at))}<br>Anfitriã: ${safe(m.host||'A definir')}<br>${safe(m.place||'Local a definir')}</div>${featured&&(!m.starts_at||!m.place||!m.card_url)?'<div class="soon">Em breve, mais informações sobre o encontro.</div>':''}<button class="outline" data-open="${safe(m.id)}">Ver detalhes${admin?` · ${count} confirmada(s)`:''}</button></div></article>`}
+function hostsLabel(m){return m.co_host?`${m.host||'A definir'} e ${m.co_host}`:m.host||'A definir'}
+function hostsDetail(m){return `<p><strong>Anfitriã sorteada:</strong> ${safe(m.host||'A definir')}</p>${m.co_host?`<p><strong>Anfitriã convidada:</strong> ${safe(m.co_host)}</p>`:''}`}
+function meetingCard(m,featured=false){const count=attendance.filter(a=>a.meeting_id===m.id&&a.confirmed).length;return `<article class="meeting-card ${featured?'featured':''}">${m.card_url?`<img src="${safe(m.card_url)}" alt="Card de divulgação do encontro" loading="lazy">`:'<div class="placeholder">Card do encontro em breve</div>'}<div class="content"><div class="eyebrow">${featured?'PRÓXIMA LEITURA':'ENCONTRO'}</div><h3>${safe(m.title||'Livro a definir')}</h3><div class="meta">${safe(fmt(m.starts_at))}<br>Anfitriãs: ${safe(hostsLabel(m))}<br>${safe(m.place||'Local a definir')}</div>${featured&&(!m.starts_at||!m.place||!m.card_url)?'<div class="soon">Em breve, mais informações sobre o encontro.</div>':''}<button class="outline" data-open="${safe(m.id)}">Ver detalhes${admin?` · ${count} confirmada(s)`:''}</button></div></article>`}
 function renderMeetings(){
  const pastWasOpen=$('pastDisclosure')?.open||false;
  const selectedMeeting=$('drawMeeting').value;
@@ -29,36 +32,193 @@ function renderMeetings(){
  else if(featured)$('drawMeeting').value=featured.id;
 }
 function bookForParticipant(p){return books.find(b=>b.id===p?.suggested_book_id)}
-function renderParticipants(){const visible=admin?participants:participants.filter(p=>p.active);$('participantList').innerHTML=visible.length?visible.map(p=>{const b=bookForParticipant(p);return `<div class="item participant-item"><div class="participant-main"><strong>${safe(p.name)}</strong><div class="participant-book">${b?`<svg class="book-icon" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 6c-3-2-6-2-10-1v14c4-1 7-1 10 1 3-2 6-2 10-1V5c-4-1-7-1-10 1Z"/><path d="M12 6v14"/></svg><span>${safe(b.title)}</span>`:'<span class="no-book">Sem indicação cadastrada</span>'}</div>${b?.author?`<div class="participant-author">${safe(b.author)}</div>`:''}${admin?`<div class="small">${p.active?'Ativa':'Inativa'}</div>`:''}</div>${admin?`<div class="right"><button class="outline" data-edit-participant="${safe(p.id)}">Editar</button><button class="quiet" data-active="${safe(p.id)}">${p.active?'Desativar':'Reativar'}</button><button class="danger" data-delete-participant="${safe(p.id)}" aria-label="Excluir ${safe(p.name)}">Excluir</button></div>`:''}</div>`}).join(''):'<div class="empty">Nenhuma integrante cadastrada.</div>'}
+function coverUrl(book){
+ const src=book?.cover_url;
+ if(!src)return '';
+ try{const u=new URL(src);return u.protocol==='https:'?u.href:''}catch{return ''}
+}
+function bookCover(book){const url=coverUrl(book);return url?`<img class="book-cover" src="${safe(url)}" alt="Capa de ${safe(book.title)}" loading="lazy" referrerpolicy="no-referrer" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="cover-placeholder" hidden aria-hidden="true">📖</span>`:'<span class="cover-placeholder" aria-hidden="true">📖</span>'}
+
+function renderParticipants(){
+ const visible=admin?participants:participants.filter(p=>p.active);
+ $('participantList').innerHTML=visible.length?visible.map(p=>{
+   const b=bookForParticipant(p);
+   return `<div class="item participant-item"><div class="participant-main cover-participant">
+    <div class="participant-cover">${bookCover(b)}</div>
+    <div class="participant-text"><strong>${safe(p.name)}</strong>
+    <div class="participant-book">${b?`<span>${safe(b.title)}</span>`:'<span class="no-book">Sem indicação cadastrada</span>'}</div>
+    ${b?.author?`<div class="participant-author">${safe(b.author)}</div>`:''}
+    ${admin?`<div class="small">${p.active?'Ativa':'Inativa'}</div>`:''}</div></div>
+    ${admin?`<div class="right"><button class="outline" data-edit-participant="${safe(p.id)}">Editar</button>${b?`<button class="quiet" data-cover-book="${safe(b.id)}">Capa</button>`:''}<button class="quiet" data-active="${safe(p.id)}">${p.active?'Desativar':'Reativar'}</button><button class="danger" data-delete-participant="${safe(p.id)}" aria-label="Excluir ${safe(p.name)}">Excluir</button></div>`:''}</div>`
+ }).join(''):'<div class="empty">Nenhuma integrante cadastrada.</div>';
+ if(admin&&!$('coverManager').hidden)renderCoverQueue();
+}
+
 function participantEditor(p){if(!admin)return;$('participantEditor').hidden=false;$('participantId').value=p?.id||'';$('participantName').value=p?.name||'';const b=bookForParticipant(p);$('participantBook').value=b?.title||'';$('participantAuthor').value=b?.author||'';$('participantFormHeading').textContent=p?'Editar integrante e indicação':'Cadastrar integrante e livro';$('participantEditor').scrollIntoView({behavior:'smooth',block:'start'});}
-function renderDetail(id){const m=meetings.find(x=>x.id===id);if(!m)return;currentMeeting=id;const a=attendance.filter(x=>x.meeting_id===id);let detail=`<div class="panel"><div class="meeting-info"><div>${m.card_url?`<img class="meeting-banner" src="${safe(m.card_url)}" alt="Card do encontro">`:'<div class="placeholder">Encontro do Clube</div>'}</div><div><div class="eyebrow">NOSSO ENCONTRO</div><h2>${safe(m.title)}</h2><p>${safe(fmt(m.starts_at))}</p><p><strong>Local:</strong> ${safe(m.place||'A definir')}</p><p><strong>Anfitriã:</strong> ${safe(m.host||'A definir')}</p><p><strong>Confirmadas:</strong> ${a.filter(x=>x.confirmed).length} · <strong>Presentes:</strong> ${a.filter(x=>x.checked_in).length}</p>${admin?`<button class="outline" data-edit-meeting="${safe(id)}">Editar encontro</button>`:''}</div></div></div>`;
-if(admin){detail+=`<div class="panel"><h3>Confirmações e check-in</h3><p class="muted">Marque a confirmação antes do encontro. No dia, marque quem compareceu O livro indicado já vem do cadastro de cada integrante.</p><div class="rows">${participants.filter(p=>p.active||a.some(x=>x.participant_id===p.id)).map(p=>{let row=a.find(x=>x.participant_id===p.id);let book=books.find(b=>b.id===(row?.suggested_book_id||p.suggested_book_id));return `<div class="item"><strong>${safe(p.name)}</strong><div class="right"><label><input data-flag="confirmed" data-person="${safe(p.id)}" type="checkbox" ${row?.confirmed?'checked':''}> Confirmou</label><label><input data-flag="checked_in" data-person="${safe(p.id)}" type="checkbox" ${row?.checked_in?'checked':''}> Presente</label><span class="small">${book?safe(book.title):'Sem livro indicado · edite a integrante'}</span></div></div>`}).join('')}</div></div>`}else{detail+=`<div class="panel"><h3>Confirmadas</h3><div class="rows">${a.filter(x=>x.confirmed).map(x=>{let p=participants.find(p=>p.id===x.participant_id);return p?`<div class="item"><strong>${safe(p.name.split(' ')[0])}</strong><span class="badge ${x.checked_in?'yes':''}">${x.checked_in?'Presente':'Confirmada'}</span></div>`:''}).join('')||'<p class="muted">Ainda sem confirmações.</p>'}</div></div>`;}
+function renderDetail(id){const m=meetings.find(x=>x.id===id);if(!m)return;currentMeeting=id;const a=attendance.filter(x=>x.meeting_id===id);let detail=`<div class="panel"><div class="meeting-info"><div>${m.card_url?`<img class="meeting-banner" src="${safe(m.card_url)}" alt="Card do encontro">`:'<div class="placeholder">Encontro do Clube</div>'}</div><div><div class="eyebrow">NOSSO ENCONTRO</div><h2>${safe(m.title)}</h2><p>${safe(fmt(m.starts_at))}</p><p><strong>Local:</strong> ${safe(m.place||'A definir')}</p>${hostsDetail(m)}<p><strong>Confirmadas:</strong> ${a.filter(x=>x.confirmed).length} · <strong>Presentes:</strong> ${a.filter(x=>x.checked_in).length}</p>${admin?`<button class="outline" data-edit-meeting="${safe(id)}">Editar encontro</button>`:''}</div></div></div>`;
+if(admin){detail+=`<div class="panel"><h3>Confirmações e check-in</h3><p class="muted">Marque a confirmação antes do encontro. No dia, marque quem compareceu O livro indicado já vem do cadastro de cada integrante.</p><div class="rows">${participants.filter(p=>p.active||a.some(x=>x.participant_id===p.id)).map(p=>{let row=a.find(x=>x.participant_id===p.id);let book=books.find(b=>b.id===(row?.suggested_book_id||p.suggested_book_id));return `<div class="item"><strong>${safe(p.name)}</strong><div class="right"><label><input data-flag="confirmed" data-person="${safe(p.id)}" type="checkbox" ${row?.confirmed?'checked':''}> Confirmou</label><label><input data-flag="checked_in" data-person="${safe(p.id)}" type="checkbox" ${row?.checked_in?'checked':''}> Presente</label><span class="small">${book?safe(book.title):'Sem livro indicado · edite a integrante'}</span></div></div>`}).join('')}</div></div>`}else{detail+=`<div class="panel"><h3>Confirmadas</h3><div class="rows">${a.filter(x=>x.confirmed).map(x=>{let p=participants.find(p=>p.id===x.participant_id);return p?`<div class="item"><strong>${safe(p.name)}</strong><span class="badge ${x.checked_in?'yes':''}">${x.checked_in?'Presente':'Confirmada'}</span></div>`:''}).join('')||'<p class="muted">Ainda sem confirmações.</p>'}</div></div>`;}
 $('meetingDetail').innerHTML=detail;$('meetingDetail').hidden=false;}
 function renderDraws(){
  const mid=$('drawMeeting').value||meetings[0]?.id;
  const d=draws.filter(x=>x.meeting_id===mid);
  const accepted=d.find(x=>x.status==='accepted');
  const last=accepted||d.at(-1);
- $('drawHistory').innerHTML=d.length?d.map(x=>{let p=participants.find(p=>p.id===x.participant_id),b=books.find(b=>b.id===x.book_id);return `<div class="item draw-history-item"><div><strong>${safe(p?.name||'Participante')}</strong><div class="small">${safe(b?.title||'Livro não informado')}</div></div><span class="badge ${x.status==='accepted'?'yes':''}">${x.status==='accepted'?'✓ Aceitou':x.status==='skipped'?'Não disponível':'Aguardando resposta'}</span></div>`}).join(''):'<div class="empty">Ainda não houve sorteio neste encontro.</div>';
+ $('drawHistory').innerHTML=d.length?d.map(x=>{let p=participants.find(p=>p.id===x.participant_id),b=books.find(b=>b.id===x.book_id);return `<div class="item draw-history-item"><div><strong>${safe(p?.name||'Participante')}</strong><div class="small">${safe(b?.title||'Livro a indicar')}</div></div><span class="badge ${x.status==='accepted'?'yes':''}">${x.status==='accepted'?'✓ Aceitou':x.status==='skipped'?'Não disponível':'Aguardando resposta'}</span></div>`}).join(''):'<div class="empty">Ainda não houve sorteio neste encontro.</div>';
  $('rollingName').textContent=last?participants.find(p=>p.id===last.participant_id)?.name||'Quem será?':'Quem será?';
- $('rollingBook').textContent=last?books.find(b=>b.id===last.book_id)?.title||'':'';
+ $('rollingBook').textContent=last?(books.find(b=>b.id===last.book_id)?.title||'Livro a indicar') : '';
  $('drawDisplay').classList.toggle('accepted',!!accepted);
  $('drawAccepted').hidden=!accepted;
  $('drawBtn').textContent=d.length?'↻ Sortear novamente':'Iniciar sorteio';
  $('drawBtn').hidden=!admin||!!accepted;
  $('acceptBtn').hidden=!(admin&&last?.status==='pending'&&!accepted);
  $('resetDraws').hidden=!admin||!d.length;
- $('drawNote').textContent=accepted?'Resultado aceito e registrado para este encontro.':d.length?`${d.filter(x=>x.status==='skipped').length} sorteada(s) excluída(s) das próximas tentativas. Confirme quando a pessoa aceitar.`:'Somente integrantes com check-in e livro indicado participam do sorteio.';
+ $('drawNote').textContent=accepted?'Resultado aceito e registrado para este encontro.':d.length?`${d.filter(x=>x.status==='skipped').length} sorteada(s) excluída(s) das próximas tentativas. Confirme quando a pessoa aceitar.`:'Participam todas as integrantes com check-in, mesmo sem livro indicado. A sorteada pode indicar o livro depois.';
 }
 async function saveAttendance(person,changes){let m=currentMeeting;if(!m)return;let old=attendance.find(x=>x.meeting_id===m&&x.participant_id===person);let row={meeting_id:m,participant_id:person,confirmed:old?.confirmed||false,checked_in:old?.checked_in||false,suggested_book_id:old?.suggested_book_id||participants.find(p=>p.id===person)?.suggested_book_id||null,...changes};if(row.checked_in)row.confirmed=true;if(!row.confirmed)row.checked_in=false;await query(db.from('attendance').upsert(row,{onConflict:'meeting_id,participant_id'}));await load();}
-function meetingEditor(m){$('meetingFormPanel').hidden=false;$('meetingId').value=m?.id||'';$('meetingTitle').value=m?.title||'';$('meetingDate').value=m?.starts_at?new Date(new Date(m.starts_at).getTime()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16):'';$('meetingHost').value=m?.host||'';$('meetingPlace').value=m?.place||'';$('meetingImage').value='';$('meetingFormPanel').scrollIntoView({behavior:'smooth'});}
-async function runDraw(){if(!admin||rolling)return;const mid=$('drawMeeting').value;if(!mid)return notify('Cadastre um encontro primeiro.',true);const previous=draws.filter(d=>d.meeting_id===mid);if(previous.some(d=>d.status==='accepted'))return notify('Este sorteio já tem resultado confirmado. Para começar de novo, reinicie a rodada.',true);const eligible=attendance.filter(x=>x.meeting_id===mid&&x.checked_in&&(x.suggested_book_id||participants.find(p=>p.id===x.participant_id)?.suggested_book_id)&&!previous.some(d=>d.participant_id===x.participant_id));if(!eligible.length)return notify('Não há mais integrantes presentes com livro indicado disponíveis para sorteio.',true);rolling=true;$('drawBtn').disabled=true;const interval=setInterval(()=>{const pick=eligible[Math.floor(Math.random()*eligible.length)];$('rollingName').textContent=participants.find(p=>p.id===pick.participant_id)?.name||'';$('rollingBook').textContent=books.find(b=>b.id===(pick.suggested_book_id||participants.find(p=>p.id===pick.participant_id)?.suggested_book_id))?.title||'';},75);setTimeout(async()=>{clearInterval(interval);try{const random=new Uint32Array(1);crypto.getRandomValues(random);const pick=eligible[random[0]%eligible.length];const lastPending=previous.filter(d=>d.status==='pending').at(-1);if(lastPending)await query(db.from('draws').update({status:'skipped'}).eq('id',lastPending.id));await query(db.from('draws').insert({meeting_id:mid,participant_id:pick.participant_id,book_id:pick.suggested_book_id||participants.find(p=>p.id===pick.participant_id)?.suggested_book_id,status:'pending'}));await load();}catch(e){notify(e.message,true)}finally{rolling=false;$('drawBtn').disabled=false}},2600);}
+function meetingEditor(m){
+ $('meetingFormPanel').hidden=false;
+ $('meetingId').value=m?.id||'';
+ $('meetingTitle').value=m?.title||'';
+ $('meetingDate').value=m?.starts_at?new Date(new Date(m.starts_at).getTime()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16):'';
+ const select=$('meetingHost');
+ const savedHost=m?.host?.trim()||'';
+ const options=participants.filter(p=>p.active||p.name===savedHost).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+ select.innerHTML='<option value="">Selecione uma integrante</option>'+options.map(p=>`<option value="${safe(p.name)}">${safe(p.name)}</option>`).join('');
+ // Preserve os nomes de anfitriãs cadastrados anteriormente que não correspondam
+ // exatamente a uma integrante (ex.: um encontro com duas anfitriãs).
+ if(savedHost&&!options.some(p=>p.name===savedHost)){
+   const legacy=document.createElement('option');
+   legacy.value=savedHost;legacy.textContent=savedHost+' (cadastro anterior)';
+   select.appendChild(legacy);
+ }
+ select.value=savedHost;
+ const coSelect=$('meetingCoHost');
+ const savedCoHost=m?.co_host?.trim()||'';
+ const coOptions=participants.filter(p=>p.active||p.name===savedCoHost).sort((a,b)=>a.name.localeCompare(b.name,'pt-BR'));
+ coSelect.innerHTML='<option value="">Nenhuma · escolher depois</option>'+coOptions.map(p=>`<option value="${safe(p.name)}">${safe(p.name)}</option>`).join('');
+ if(savedCoHost&&!coOptions.some(p=>p.name===savedCoHost)){
+  const legacy=document.createElement('option');legacy.value=savedCoHost;legacy.textContent=savedCoHost+' (cadastro anterior)';coSelect.appendChild(legacy);
+ }
+ coSelect.value=savedCoHost;
+ $('meetingPlace').value=m?.place||'';
+ $('meetingImage').value='';
+ $('meetingFormPanel').scrollIntoView({behavior:'smooth'});
+}
+async function runDraw(){
+ if(!admin||rolling)return;
+ const mid=$('drawMeeting').value;
+ if(!mid)return notify('Cadastre um encontro primeiro.',true);
+ const previous=draws.filter(d=>d.meeting_id===mid);
+ if(previous.some(d=>d.status==='accepted'))return notify('Este sorteio já tem resultado confirmado. Para começar de novo, reinicie a rodada.',true);
+ // Todas as presentes concorrem, mesmo que ainda não tenham livro indicado.
+ const eligible=attendance.filter(x=>x.meeting_id===mid&&x.checked_in&&!previous.some(d=>d.participant_id===x.participant_id));
+ if(!eligible.length)return notify('Não há mais integrantes presentes disponíveis para sorteio.',true);
+ rolling=true;$('drawBtn').disabled=true;
+ const interval=setInterval(()=>{
+  const pick=eligible[Math.floor(Math.random()*eligible.length)];
+  $('rollingName').textContent=participants.find(p=>p.id===pick.participant_id)?.name||'';
+  $('rollingBook').textContent=books.find(b=>b.id===(pick.suggested_book_id||participants.find(p=>p.id===pick.participant_id)?.suggested_book_id))?.title||'Livro a indicar';
+ },75);
+ setTimeout(async()=>{
+  clearInterval(interval);
+  try{
+   const random=new Uint32Array(1);crypto.getRandomValues(random);
+   const pick=eligible[random[0]%eligible.length];
+   const lastPending=previous.filter(d=>d.status==='pending').at(-1);
+   if(lastPending)await query(db.from('draws').update({status:'skipped'}).eq('id',lastPending.id));
+   await query(db.from('draws').insert({meeting_id:mid,participant_id:pick.participant_id,book_id:pick.suggested_book_id||participants.find(p=>p.id===pick.participant_id)?.suggested_book_id||null,status:'pending'}));
+   await load();
+  }catch(e){notify(e.message,true)}finally{rolling=false;$('drawBtn').disabled=false}
+ },2600);
+}
+// A indicação posterior atualiza o sorteio aceito e o rascunho ligado a ele,
+// sem reescrever encontros históricos ou títulos já alterados manualmente.
+async function syncPendingBookForAcceptedDraw(participantId,bookId){
+ if(!bookId)return;
+ const acceptedWithoutBook=draws.filter(d=>d.participant_id===participantId&&d.status==='accepted'&&!d.book_id);
+ if(!acceptedWithoutBook.length)return;
+ const book=books.find(b=>b.id===bookId) || await query(db.from('books').select('*').eq('id',bookId).single());
+ for(const d of acceptedWithoutBook){
+  await query(db.from('draws').update({book_id:bookId}).eq('id',d.id));
+  const draft=meetings.find(m=>m.source_draw_id===d.id);
+  if(draft&&(!draft.title||draft.title==='Livro a definir')){
+   await query(db.from('meetings').update({title:book.title}).eq('id',draft.id));
+  }
+ }
+}
+
+// Busca sob demanda: nunca seleciona automaticamente uma edição incorreta.
+function renderCoverQueue(){
+ const pending=books.filter(b=>!coverUrl(b)&&participants.some(p=>p.suggested_book_id===b.id));
+ const covered=books.filter(b=>coverUrl(b)&&participants.some(p=>p.suggested_book_id===b.id));
+ $('coverQueue').innerHTML=`<p class="muted">${pending.length} livro(s) sem capa · ${covered.length} com capa salva</p>`+
+   (pending.length?pending.map(b=>`<div class="item cover-queue-item"><span><strong>${safe(b.title)}</strong><br><small>${safe(b.author||'Autoria não cadastrada')}</small></span><button class="outline" data-cover-book="${safe(b.id)}">Pesquisar capa</button></div>`).join(''):'<p class="muted">Todos os livros indicados já têm capa.</p>');
+}
+function showCoverManager(){if(!admin)return;$('coverManager').hidden=false;$('coverEditor').hidden=true;renderCoverQueue();$('coverManager').scrollIntoView({behavior:'smooth',block:'start'});}
+function normalized(s){return String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()}
+function matchQuality(book,result){
+ let t=normalized(book.title),r=normalized(result.title);
+ let a=normalized(book.author),ra=normalized(result.author);
+ return (t===r?10:t&&r&&(t.includes(r)||r.includes(t))?4:0)+(a&&ra&&(a===ra||ra.includes(a)||a.includes(ra))?5:0);
+}
+async function fetchCovers(book){
+ const q=[book.title,book.author].filter(Boolean).join(' ');
+ const queries=[
+  (async()=>{const r=await fetch('https://www.googleapis.com/books/v1/volumes?'+new URLSearchParams({q,maxResults:'20',printType:'books',langRestrict:'pt'}),{signal:AbortSignal.timeout(10000)});if(!r.ok)throw Error('Google Books indisponível');const j=await r.json();return (j.items||[]).map(i=>{const v=i.volumeInfo||{};return {title:v.title||'',author:(v.authors||[]).join(', '),url:v.imageLinks?.thumbnail||v.imageLinks?.smallThumbnail||'',source:'Google Books'}})})(),
+  (async()=>{const r=await fetch('https://openlibrary.org/search.json?'+new URLSearchParams({title:book.title,author:book.author||'',limit:'12',fields:'title,author_name,cover_i'}),{signal:AbortSignal.timeout(10000)});if(!r.ok)throw Error('Open Library indisponível');const j=await r.json();return (j.docs||[]).filter(d=>d.cover_i).map(d=>({title:d.title||'',author:(d.author_name||[]).slice(0,2).join(', '),url:`https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg`,source:'Open Library'}))})()
+ ];
+ const settled=await Promise.allSettled(queries);
+ if(settled.every(x=>x.status==='rejected'))throw Error('Os catálogos estão indisponíveis. Tente novamente ou envie sua própria capa.');
+ const candidates=settled.filter(x=>x.status==='fulfilled').flatMap(x=>x.value).filter(x=>x.url).map(x=>({...x,url:x.url.replace(/^http:/,'https:')}));
+ const filtered=candidates.filter(x=>matchQuality(book,x)>=4).sort((a,b)=>matchQuality(book,b)-matchQuality(book,a));
+ const seen=new Set();return filtered.filter(x=>{const k=x.url;if(seen.has(k))return false;seen.add(k);return true}).slice(0,8);
+}
+async function openCoverSearch(id){
+ if(!admin)return;
+ const book=books.find(b=>b.id===id);if(!book)return;
+ coverBookId=id;coverBusy=true;coverOptions=[];
+ $('coverManager').hidden=false;$('coverEditor').hidden=false;
+ $('coverBookTitle').textContent=`Capa para “${book.title}”`;
+ $('coverResults').innerHTML='';$('coverFeedback').textContent='Pesquisando sugestões pelo título e autor…';
+ $('coverFile').value='';$('uploadCover').disabled=false;
+ $('coverManager').scrollIntoView({behavior:'smooth',block:'start'});
+ try{
+  const results=await fetchCovers(book);
+  if(coverBookId!==id)return;
+  $('coverFeedback').textContent=results.length?'Confira a edição e toque em “Usar esta capa”.':'Não encontrei uma capa correspondente. Você pode enviar uma imagem.';
+  $('coverResults').innerHTML=results.map((r,i)=>`<article class="cover-choice"><img src="${safe(r.url)}" alt="Sugestão de capa ${i+1}" loading="lazy" referrerpolicy="no-referrer"><div class="cover-choice-text"><strong>${safe(r.title)}</strong><small>${safe(r.author)}</small><small>${safe(r.source)}</small></div><button class="outline" data-choose-cover="${i}">Usar esta capa</button></article>`).join('');
+  coverOptions=results;
+ }catch(err){$('coverFeedback').textContent=err.message;}finally{coverBusy=false}
+}
+async function saveCover(url){
+ if(!admin||!coverBookId)return;
+ const u=new URL(url);if(u.protocol!=='https:')throw Error('A imagem deve usar HTTPS.');
+ await query(db.from('books').update({cover_url:url}).eq('id',coverBookId));
+ coverBookId=null;$('coverEditor').hidden=true;
+ await load();notify('Capa salva! Ela aparecerá para todas as integrantes.');
+}
+async function uploadCover(){
+ if(!admin||!coverBookId)return;
+ const file=$('coverFile').files?.[0];if(!file)throw Error('Selecione uma imagem para enviar.');
+ if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw Error('Envie uma imagem JPG, PNG ou WebP.');
+ if(file.size>3*1024*1024)throw Error('A imagem deve ter até 3 MB.');
+ const ext=({'image/jpeg':'jpg','image/png':'png','image/webp':'webp'})[file.type];
+ const path=`${coverBookId}/${crypto.randomUUID()}.${ext}`;
+ await query(db.storage.from('book-covers').upload(path,file,{contentType:file.type,upsert:false}));
+ const url=db.storage.from('book-covers').getPublicUrl(path).data.publicUrl;
+ await saveCover(url);
+}
 async function initial(){const logo=$('logo');logo.onerror=()=>{logo.hidden=true};$('setup').hidden=configured;document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));$('loginToggle').onclick=async()=>{if(admin){await db.auth.signOut();admin=false;$('authPanel').hidden=true;render()}else{$('authPanel').hidden=!$('authPanel').hidden;$('authPanel').scrollIntoView({behavior:'smooth'})}};$('logout').onclick=async()=>{await db.auth.signOut();admin=false;render()};$('loginForm').onsubmit=async e=>{e.preventDefault();if(!db)return notify('Configure o Supabase primeiro.',true);try{await query(db.auth.signInWithPassword({email:$('email').value,password:$('password').value}));await checkAdmin();$('authPanel').hidden=admin;if(!admin)notify('A conta existe, mas não está autorizada como admin.',true);}catch(err){notify('Não foi possível entrar: '+err.message,true)}};
-$('newParticipant').onclick=()=>participantEditor(null);$('cancelParticipant').onclick=()=>$('participantEditor').hidden=true;$('newMeeting').onclick=()=>meetingEditor(null);$('cancelMeeting').onclick=()=>$('meetingFormPanel').hidden=true;
-$('meetingForm').onsubmit=async e=>{e.preventDefault();try{let old=meetings.find(m=>m.id===$('meetingId').value);let card_url=old?.card_url||'';let file=$('meetingImage').files[0];if(file){if(file.size>5242880)throw Error('O card deve ter até 5 MB.');const ext=file.name.split('.').pop().toLowerCase();const path=`${crypto.randomUUID()}.${ext}`;await query(db.storage.from('meeting-cards').upload(path,file,{contentType:file.type}));card_url=db.storage.from('meeting-cards').getPublicUrl(path).data.publicUrl}const row={title:$('meetingTitle').value.trim(),starts_at:$('meetingDate').value?new Date($('meetingDate').value).toISOString():null,place:$('meetingPlace').value.trim(),host:$('meetingHost').value.trim(),card_url};if(old)await query(db.from('meetings').update(row).eq('id',old.id));else await query(db.from('meetings').insert(row));$('meetingFormPanel').hidden=true;await load();notify('Encontro salvo!')}catch(err){notify(err.message,true)}};
+$('openCoverManager').onclick=showCoverManager;
+ $('closeCoverManager').onclick=()=>{$('coverManager').hidden=true;coverBookId=null};
+ $('cancelCover').onclick=()=>{coverBookId=null;$('coverEditor').hidden=true;renderCoverQueue()};
+ $('uploadCover').onclick=async()=>{if(coverBusy)return;try{$('uploadCover').disabled=true;await uploadCover()}catch(err){$('coverFeedback').textContent=err.message}finally{$('uploadCover').disabled=false}};
+ $('newParticipant').onclick=()=>participantEditor(null);$('cancelParticipant').onclick=()=>$('participantEditor').hidden=true;$('newMeeting').onclick=()=>meetingEditor(null);$('cancelMeeting').onclick=()=>$('meetingFormPanel').hidden=true;
+$('meetingForm').onsubmit=async e=>{e.preventDefault();try{let old=meetings.find(m=>m.id===$('meetingId').value);let card_url=old?.card_url||'';let file=$('meetingImage').files[0];if(file){if(file.size>5242880)throw Error('O card deve ter até 5 MB.');const ext=file.name.split('.').pop().toLowerCase();const path=`${crypto.randomUUID()}.${ext}`;await query(db.storage.from('meeting-cards').upload(path,file,{contentType:file.type}));card_url=db.storage.from('meeting-cards').getPublicUrl(path).data.publicUrl}const row={title:$('meetingTitle').value.trim(),starts_at:$('meetingDate').value?new Date($('meetingDate').value).toISOString():null,place:$('meetingPlace').value.trim(),host:$('meetingHost').value.trim(),co_host:$('meetingCoHost').value.trim()||null,card_url};if(row.host&&row.co_host&&row.host===row.co_host)throw Error('Escolha duas integrantes diferentes para anfitriãs.');if(old)await query(db.from('meetings').update(row).eq('id',old.id));else await query(db.from('meetings').insert(row));$('meetingFormPanel').hidden=true;await load();notify('Encontro salvo!')}catch(err){notify(err.message,true)}};
 $('participantForm').onsubmit=async e=>{e.preventDefault();if(!admin)return;const btn=$('saveParticipant');btn.disabled=true;try{const id=$('participantId').value;const name=$('participantName').value.trim(),title=$('participantBook').value.trim(),author=$('participantAuthor').value.trim();if(!name)throw Error('Preencha o nome da integrante.');if(author&&!title)throw Error('Informe o título do livro ou deixe também a autoria em branco.');const old=participants.find(p=>p.id===id);const oldBook=bookForParticipant(old);let bookId=oldBook?.id||null;let createdBookId=null;
 if(!title){bookId=null;}else if(!oldBook||oldBook.title!==title||oldBook.author!==author){const existing=books.find(b=>b.title.toLocaleLowerCase('pt-BR')===title.toLocaleLowerCase('pt-BR')&&b.author.toLocaleLowerCase('pt-BR')===author.toLocaleLowerCase('pt-BR'));if(existing){bookId=existing.id;}else{const result=await query(db.from('books').insert({title,author}).select('id').single());bookId=result.id;createdBookId=bookId;}}
 try{if(old){await query(db.from('participants').update({name,suggested_book_id:bookId}).eq('id',id))}else{await query(db.from('participants').insert({name,suggested_book_id:bookId}))}}catch(err){if(createdBookId)await db.from('books').delete().eq('id',createdBookId);throw err;}
+if(old&&bookId){await syncPendingBookForAcceptedDraw(old.id,bookId);}
 $('participantForm').reset();$('participantId').value='';$('participantEditor').hidden=true;await load();notify('Cadastro da integrante salvo!');}catch(err){notify(err.message,true)}finally{btn.disabled=false}};
 async function deleteParticipant(id){
   if(!admin)return;
@@ -82,7 +242,10 @@ async function deleteParticipant(id){
   await load();
   notify(`${p.name} foi excluída do cadastro.`);
 }
-document.body.addEventListener('click',async e=>{let t=e.target.closest('[data-open],[data-edit-meeting],[data-active],[data-edit-participant],[data-delete-participant]');if(!t)return;try{if(t.dataset.open){renderDetail(t.dataset.open);$('meetingDetail').scrollIntoView({behavior:'smooth'})}if(admin&&t.dataset.editParticipant)participantEditor(participants.find(p=>p.id===t.dataset.editParticipant));if(admin&&t.dataset.deleteParticipant)await deleteParticipant(t.dataset.deleteParticipant);if(admin&&t.dataset.editMeeting)meetingEditor(meetings.find(m=>m.id===t.dataset.editMeeting));if(admin&&t.dataset.active){let p=participants.find(p=>p.id===t.dataset.active);await query(db.from('participants').update({active:!p.active}).eq('id',p.id));await load()}}catch(err){notify(err.message,true)}});
+document.body.addEventListener('click',async e=>{let t=e.target.closest('[data-open],[data-edit-meeting],[data-active],[data-edit-participant],[data-delete-participant],[data-cover-book],[data-choose-cover]');if(!t)return;try{
+ if(t.dataset.coverBook){await openCoverSearch(t.dataset.coverBook);return}
+ if(t.dataset.chooseCover!==undefined){if(coverBusy)return;const candidate=coverOptions[Number(t.dataset.chooseCover)];if(candidate){await saveCover(candidate.url)}return}
+ if(t.dataset.open){renderDetail(t.dataset.open);$('meetingDetail').scrollIntoView({behavior:'smooth'})}if(admin&&t.dataset.editParticipant)participantEditor(participants.find(p=>p.id===t.dataset.editParticipant));if(admin&&t.dataset.deleteParticipant)await deleteParticipant(t.dataset.deleteParticipant);if(admin&&t.dataset.editMeeting)meetingEditor(meetings.find(m=>m.id===t.dataset.editMeeting));if(admin&&t.dataset.active){let p=participants.find(p=>p.id===t.dataset.active);await query(db.from('participants').update({active:!p.active}).eq('id',p.id));await load()}}catch(err){notify(err.message,true)}});
 document.body.addEventListener('change',async e=>{const t=e.target;if(!admin)return;try{if(t.dataset.flag)await saveAttendance(t.dataset.person,{[t.dataset.flag]:t.checked});}catch(err){notify(err.message,true);await load()}});
 $('drawMeeting').onchange=renderDraws;$('drawBtn').onclick=runDraw;$('acceptBtn').onclick=async()=>{
  if(!admin||rolling)return;
@@ -90,17 +253,21 @@ $('drawMeeting').onchange=renderDraws;$('drawBtn').onclick=runDraw;$('acceptBtn'
  if(!d||d.status!=='pending')return;
  const name=participants.find(p=>p.id===d.participant_id)?.name||'a participante';
  const book=books.find(b=>b.id===d.book_id);
- if(!confirm(`Confirmar que ${name} aceitou ser anfitriã e que o próximo livro será “${book?.title||'a definir'}”?`))return;
+ const description=book?`o próximo livro será “${book.title}”`:'o livro será indicado depois';
+ if(!confirm(`Confirmar que ${name} aceitou ser anfitriã e que ${description}?`))return;
  try{
   await query(db.from('draws').update({status:'accepted'}).eq('id',d.id));
   let draftCreated=false,draftError=null;
-  if(book){
-   const existing=meetings.some(m=>m.id!==mid&&m.title.trim().toLocaleLowerCase('pt-BR')===book.title.trim().toLocaleLowerCase('pt-BR')&&m.host.trim().toLocaleLowerCase('pt-BR')===name.trim().toLocaleLowerCase('pt-BR'));
-   if(!existing){try{await query(db.from('meetings').insert({title:book.title,host:name,place:'',card_url:'',starts_at:null}));draftCreated=true}catch(err){draftError=err;}}
+  const existing=meetings.find(m=>m.source_draw_id===d.id);
+  if(!existing){
+   try{
+    await query(db.from('meetings').insert({title:book?.title||'Livro a definir',host:name,co_host:null,place:'',card_url:'',starts_at:null,source_draw_id:d.id}));
+    draftCreated=true;
+   }catch(err){draftError=err;}
   }
   await load();
-  if(draftError)notify('Resultado confirmado, mas não foi possível criar o próximo encontro: '+draftError.message,true);
-  else notify(draftCreated?'✓ Aceite registrado! Um rascunho do próximo encontro foi criado com livro e anfitriã.':'✓ Aceite registrado! O resultado está confirmado.');
+  if(draftError)notify('Aceite registrado, mas não foi possível criar o rascunho do encontro: '+draftError.message,true);
+  else notify(draftCreated?`✓ Aceite registrado! Próximo encontro criado com ${book?'livro e anfitriã':'anfitriã; o livro pode ser indicado depois'}.`:'✓ Aceite registrado! O resultado está confirmado.');
  }catch(e){notify(e.message,true)}
 };
 $('resetDraws').onclick=async()=>{if(!admin||rolling)return;if(!confirm('Atenção: reiniciar apaga o histórico de sorteios deste encontro, inclusive resultados confirmados. Deseja continuar?'))return;try{await query(db.from('draws').delete().eq('meeting_id',$('drawMeeting').value));await load()}catch(e){notify(e.message,true)}};

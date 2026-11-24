@@ -22,3 +22,39 @@
 .archive-body{padding:0 14px 14px}
 .archive-grid .meeting-card{margin-bottom:0}
 @media(max-width:650px){.archive-disclosure summary{padding:12px 14px}.archive-disclosure summary strong{font-size:1.03rem}.archive-body{padding:0 10px 10px}}
+
+/* v1.1 — duas anfitriãs, sem aumentar a altura do formulário */
+.cohost-help{margin:-5px 0 5px;font-size:.78rem}
+
+/* v1.3 — capas: cartões compactos e escolha de edição */
+.cover-toolbar{display:flex;justify-content:flex-end;margin:0 0 12px}
+.cover-toolbar button{font-size:.82rem;padding:8px 12px}
+.cover-participant{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
+.participant-cover{width:51px;height:76px;flex:0 0 51px;display:flex;align-items:center;justify-content:center;overflow:hidden;border-radius:5px;background:#f7eef1;border:1px solid var(--line)}
+.book-cover{width:100%;height:100%;object-fit:contain;background:#f7eef1}
+.cover-placeholder{font-size:1.45rem;color:var(--wine)}
+.participant-text{min-width:0}
+.participant-book{display:block!important;padding-left:0!important}
+.participant-author{padding-left:0!important}
+.cover-queue{display:grid;gap:8px;margin-top:14px}
+.cover-queue-item{flex-direction:row;align-items:center}
+.cover-queue-item span{min-width:0;overflow-wrap:anywhere}
+.cover-queue-item small{color:var(--sub)}
+.cover-results{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin:15px 0}
+.cover-choice{display:flex;flex-direction:column;gap:8px;border:1px solid var(--line);border-radius:12px;padding:12px;background:#fff}
+.cover-choice img{height:178px;width:100%;object-fit:contain;background:#faf5f7;border-radius:6px}
+.cover-choice-text{display:flex;flex-direction:column;gap:3px;flex:1;overflow-wrap:anywhere}
+.cover-choice-text strong{font-size:.87rem}
+.cover-choice-text small{color:var(--sub);font-size:.75rem}
+.cover-choice button{font-size:.78rem;padding:9px 10px}
+.upload-label{margin-top:14px}
+@media(max-width:650px){
+ .cover-participant{gap:10px;align-items:center}
+ .participant-cover{width:44px;height:66px;flex-basis:44px}
+ .participant-item{padding:9px 11px}
+ .cover-results{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+ .cover-choice{padding:9px}
+ .cover-choice img{height:145px}
+ .cover-queue-item{flex-direction:column;align-items:stretch}
+}
+[hidden]{display:none!important}
