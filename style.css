@@ -232,3 +232,24 @@ button.member-avatar-button > .member-initials {line-height:normal}
  .tabs button{font-size:.77rem;padding:9px 11px}
  .public-confirmed{min-height:53px}
 }
+
+/* v2.0 — navegação, capas no editor e sorteios históricos */
+.brand-home{display:block;flex:0 0 auto;border:0;padding:0;margin:0;line-height:0;background:transparent;border-radius:50%;cursor:pointer}
+.brand-home:focus-visible{outline:3px solid #fff;outline-offset:3px}
+.brand-home img{display:block}
+#tab-participantes .sectionhead{margin-bottom:8px}
+#tab-participantes .sectionhead .eyebrow{margin-bottom:0}
+.cover-tool-heading{font-size:.9rem;font-weight:700;color:var(--dark);margin-bottom:9px}
+.participant-cover-tools{background:#fbf6f8;border:1px solid var(--line);padding:12px;border-radius:13px}
+.cover-tool-body{display:flex;align-items:center;gap:13px}
+.participant-cover-preview{flex:0 0 65px;width:65px;height:95px;border-radius:8px;background:#f1e6eb;border:1px solid var(--line);overflow:hidden;display:grid;place-items:center}
+.participant-cover-preview img{width:100%;height:100%;object-fit:contain}
+.cover-empty-preview{font-size:.7rem;color:var(--sub);text-align:center;padding:5px}
+.cover-tool-actions{display:grid;gap:6px;flex:1;min-width:0}
+.cover-tool-actions button{justify-self:start;padding:9px 12px;font-size:.84rem}
+.cover-tool-actions .muted{margin:0;font-size:.74rem}
+.cover-editor-integrated{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+.cover-editor-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.draw-historical-note{border-radius:12px;padding:14px;background:#f5ebef;border:1px solid #e7d8df;color:var(--wine);text-align:center;margin:15px 0;font-size:.88rem;font-weight:600}
+#drawDisplay[hidden],#drawHistoricalNote[hidden],#coverManager[hidden],#participantCoverTools[hidden]{display:none!important}
+@media(max-width:650px){.participant-cover-preview{width:54px;height:82px;flex-basis:54px}.cover-tool-body{gap:10px}.cover-tool-actions button{font-size:.77rem}}

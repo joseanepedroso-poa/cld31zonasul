@@ -1,18 +1,18 @@
-Clube de Leitura d’Elas · Grupo 31 — versão 1.6
-
-Novidade: fotos das integrantes em avatar circular ao lado do nome. Capa do livro e status mantidos.
-Sem foto: iniciais. Somente Admin pode adicionar, trocar e remover fotos.
+Clube de Leitura d’Elas — Grupo 31 Zona Sul | Versão 2.0
 
 PUBLICAÇÃO
-1. No Supabase > SQL Editor, execute migration_v16.sql uma vez.
-2. No GitHub, faça upload de index.html, app.js e style.css, substituindo os existentes.
-3. Não substitua config.js e não altere logo.png.
-4. Teste uma foto com o Admin e confirme a visualização sem login no celular.
+1. Mantenha no GitHub o seu config.js e logo.png atuais.
+2. Envie index.html, style.css e app.js (na raiz do repositório).
+3. Confirme o commit. Não é necessário executar SQL.
 
-PRIVACIDADE
-As fotos são publicadas num bucket PÚBLICO do Supabase, acessíveis a visitantes do site.
-Publique somente fotografias cujo uso público foi autorizado pelas integrantes.
-Tamanho máximo 4 MB; formatos JPG, PNG e WebP.
+NOVIDADES
+- Tocar no logo retorna à aba Encontros.
+- Em encontro sem sorteio registrado, exibe aviso discreto e as anfitriãs abaixo, sem cartão de resultado.
+- Busca e envio de capa dentro da edição da participante e de seu livro.
+- Removida a função de gerenciar todas as capas na tela principal.
+- Removido o título grande repetido “Quem faz o clube”.
+- Selo “Lido pelo grupo”.
 
-Não foi necessário alterar os dados já cadastrados. As políticas RLS existentes continuam
-protegendo os cadastros: somente usuários na tabela admins podem modificar registros.
+IMPORTANTE SOBRE CAPAS: ao alterar o título/autoria, salve a integrante e reabra Editar antes de buscar a capa para o novo livro. As capas anteriores ficam preservadas.
+
+VALIDAÇÃO: conferir navegação, edição de livro, busca de capa e histórico de sorteio no site conectado ao Supabase.

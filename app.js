@@ -52,8 +52,8 @@ function readingBookId(){
 }
 function bookStatus(b){
  if(!b)return '';
- if(b.id===readingBookId())return '<span class="reading-status" aria-label="Livro em leitura pelo clube">◉ Em leitura</span>';
- return meetingBookWasRead(b)?'<span class="read-status">✓ Lido pelo clube</span>':'';
+ if(b.id===readingBookId())return '<span class="reading-status" aria-label="Livro em leitura pelo grupo">◉ Em leitura</span>';
+ return meetingBookWasRead(b)?'<span class="read-status">✓ Lido pelo grupo</span>':'';
 }
 function bookForParticipant(p){return books.find(b=>b.id===p?.suggested_book_id)}
 function coverUrl(book){
@@ -82,9 +82,9 @@ function renderParticipants(){
       ${memberHosted(p)?'<div class="member-hosted">✦ Já foi anfitriã</div>':''}
     </div>
    </div>
-   ${admin?`<div class="right member-actions"><button class="outline" data-edit-participant="${safe(p.id)}">Editar</button><button class="quiet" data-photo-person="${safe(p.id)}">${photoUrl(p)?'Trocar foto':'Adicionar foto'}</button>${photoUrl(p)?`<button class="quiet" data-remove-photo="${safe(p.id)}">Remover foto</button>`:''}${b?`<button class="quiet" data-cover-book="${safe(b.id)}">Capa</button>`:''}<button class="quiet" data-active="${safe(p.id)}">${p.active?'Desativar':'Reativar'}</button><button class="danger" data-delete-participant="${safe(p.id)}" aria-label="Excluir ${safe(p.name)}">Excluir</button></div>`:''}</div>`
+   ${admin?`<div class="right member-actions"><button class="outline" data-edit-participant="${safe(p.id)}">Editar</button><button class="quiet" data-photo-person="${safe(p.id)}">${photoUrl(p)?'Trocar foto':'Adicionar foto'}</button>${photoUrl(p)?`<button class="quiet" data-remove-photo="${safe(p.id)}">Remover foto</button>`:''}<button class="quiet" data-active="${safe(p.id)}">${p.active?'Desativar':'Reativar'}</button><button class="danger" data-delete-participant="${safe(p.id)}" aria-label="Excluir ${safe(p.name)}">Excluir</button></div>`:''}</div>`
  }).join(''):'<div class="empty">Nenhuma integrante cadastrada.</div>';
- if(admin&&!$('coverManager').hidden)renderCoverQueue();
+
 }
 
 function photoObjectPath(url){
@@ -122,7 +122,27 @@ async function clearParticipantPhoto(id){
  photoSaving=true;
  try{await query(db.from('participants').update({photo_url:null}).eq('id',id));await removeStoredPhoto(p.photo_url);await load();notify('Foto removida.')}finally{photoSaving=false}
 }
-function participantEditor(p){if(!admin)return;$('participantEditor').hidden=false;$('participantId').value=p?.id||'';$('participantName').value=p?.name||'';const b=bookForParticipant(p);$('participantBook').value=b?.title||'';$('participantAuthor').value=b?.author||'';$('participantRead').checked=!!b?.read_by_club;$('participantReadWrap').hidden=!b;$('participantFormHeading').textContent=p?'Editar integrante e indicação':'Cadastrar integrante e livro';$('participantEditor').scrollIntoView({behavior:'smooth',block:'start'});}
+function refreshParticipantCoverControls(){
+ const id=$('participantId').value;
+ const p=participants.find(x=>x.id===id);
+ const b=bookForParticipant(p);
+ const tools=$('participantCoverTools');tools.hidden=!b;
+ $('coverManager').hidden=true;coverBookId=null;
+ if(!b)return;
+ const url=coverUrl(b);
+ $('participantCoverPreview').innerHTML=url?`<img src="${safe(url)}" alt="Capa atual de ${safe(b.title)}" referrerpolicy="no-referrer">`:'<span class="cover-empty-preview">Sem capa</span>';
+ const changed=$('participantBook').value.trim()!==b.title||$('participantAuthor').value.trim()!==(b.author||'');
+ $('searchCoverInEditor').disabled=changed;
+ $('coverEditHint').textContent=changed?'Salve primeiro o novo título e a autoria; depois abra novamente Editar para buscar a capa.':'Você pode pesquisar outra edição ou enviar uma capa aqui.';
+}
+function participantEditor(p){
+ if(!admin)return;
+ $('participantEditor').hidden=false;$('participantId').value=p?.id||'';$('participantName').value=p?.name||'';
+ const b=bookForParticipant(p);$('participantBook').value=b?.title||'';$('participantAuthor').value=b?.author||'';
+ $('participantRead').checked=!!b?.read_by_club;$('participantReadWrap').hidden=!b;
+ $('participantFormHeading').textContent=p?'Editar integrante e indicação':'Cadastrar integrante e livro';
+ refreshParticipantCoverControls();$('participantEditor').scrollIntoView({behavior:'smooth',block:'start'});
+}
 function renderDetail(id){const m=meetings.find(x=>x.id===id);if(!m)return;currentMeeting=id;const a=attendance.filter(x=>x.meeting_id===id);let detail=`<div class="panel"><div class="meeting-info"><div>${m.card_url?`<img class="meeting-banner" src="${safe(m.card_url)}" alt="Card do encontro">`:'<div class="placeholder">Encontro do Clube</div>'}</div><div><div class="eyebrow">NOSSO ENCONTRO</div><h2>${safe(meetingTitle(m))}</h2><p>${safe(fmt(m.starts_at))}</p><p><strong>Local:</strong> ${safe(m.place||'A definir')}</p>${hostsDetail(m)}<p><strong>Confirmadas:</strong> ${a.filter(x=>x.confirmed).length} · <strong>Presentes:</strong> ${a.filter(x=>x.checked_in).length}</p>${admin?`<button class="outline" data-edit-meeting="${safe(id)}">Editar encontro</button>`:''}</div></div></div>`;
 if(admin&&isPastMeeting(m)){
  detail+=`<div class="panel archive-presence"><div class="eyebrow">ENCONTRO ANTERIOR</div><h3>Registro histórico</h3><p class="muted">O check-in está encerrado. Não é necessário cadastrar presenças dos encontros anteriores.</p></div>`;
@@ -177,14 +197,16 @@ function renderDraws(){
  const hostNames=[participants.find(p=>p.id===meeting?.host_participant_id)?.name||meeting?.host,participants.find(p=>p.id===meeting?.co_host_participant_id)?.name||meeting?.co_host].map(n=>String(n||'').trim()).filter(n=>n&&normalized(n)!=='a definir');
  const historyPanel=$('drawHistoryPanel'), historyTitle=$('drawHistoryTitle');
  historyPanel.hidden=historicWithoutDraws&&!hostNames.length;
+ $('drawDisplay').hidden=historicWithoutDraws;
+ $('drawHistoricalNote').hidden=!historicWithoutDraws;
  historyTitle.textContent=historicWithoutDraws?'Anfitriãs do encontro':'Histórico do sorteio';
  if(historicWithoutDraws){
   $('drawHistory').innerHTML=hostNames.map((name,i)=>`<div class="item historic-host"><div><strong>${safe(name)}</strong><div class="small">${i===0?'Anfitriã':'Anfitriã convidada'}</div></div></div>`).join('');
  }else if(d.length){
   $('drawHistory').innerHTML=d.map(x=>{let p=participants.find(p=>p.id===x.participant_id),b=books.find(b=>b.id===x.book_id);return `<div class="item draw-history-item"><div><strong>${safe(p?.name||'Participante')}</strong><div class="small">${safe(b?.title||'Livro a indicar')}</div></div><span class="badge ${x.status==='accepted'?'yes':''}">${x.status==='accepted'?'✓ Aceitou':x.status==='skipped'?'Não disponível':'Aguardando resposta'}</span></div>`}).join('');
  }else{$('drawHistory').innerHTML='<div class="empty">Sorteio ainda não realizado.</div>'}
- $('rollingName').textContent=last?participants.find(p=>p.id===last.participant_id)?.name||'Quem será?':historicWithoutDraws?(hostNames.join(' e ')||'Encontro anterior'):'Quem será?';
- $('rollingBook').textContent=last?(books.find(b=>b.id===last.book_id)?.title||'Livro a indicar'):historicWithoutDraws?'Anfitriã(s) cadastrada(s) para este encontro':'';
+ $('rollingName').textContent=last?participants.find(p=>p.id===last.participant_id)?.name||'Quem será?':'Quem será?';
+ $('rollingBook').textContent=last?(books.find(b=>b.id===last.book_id)?.title||'Livro a indicar'):'';
  $('drawDisplay').classList.toggle('accepted',!!accepted);
  $('drawAccepted').hidden=!accepted;
  $('drawBtn').textContent=d.length?'↻ Sortear novamente':'Iniciar sorteio';
@@ -192,7 +214,7 @@ function renderDraws(){
  $('drawBtn').hidden=!canDraw||!!accepted;
  $('acceptBtn').hidden=!(canDraw&&last?.status==='pending'&&!accepted);
  $('resetDraws').hidden=!canDraw||!d.length;
- $('drawNote').textContent=historicWithoutDraws?'Informações do encontro histórico, sem sorteio registrado no site.':accepted?'Resultado aceito e registrado para este encontro.':d.length?`${d.filter(x=>x.status==='skipped').length} sorteada(s) excluída(s) das próximas tentativas. Confirme quando a pessoa aceitar.`:'Participam todas as integrantes com check-in, mesmo sem livro indicado. A sorteada pode indicar o livro depois.';
+ $('drawNote').textContent=historicWithoutDraws?'':accepted?'Resultado aceito e registrado para este encontro.':d.length?`${d.filter(x=>x.status==='skipped').length} sorteada(s) excluída(s) das próximas tentativas. Confirme quando a pessoa aceitar.`:'Participam todas as integrantes com check-in, mesmo sem livro indicado. A sorteada pode indicar o livro depois.';
 }
 async function saveAttendance(person,changes){let m=currentMeeting;if(!m)return;if(isPastMeeting(meetings.find(x=>x.id===m)))throw Error('O check-in de encontros anteriores está encerrado.');let old=attendance.find(x=>x.meeting_id===m&&x.participant_id===person);if(changes.checked_in===true&&!old?.confirmed)throw Error('Somente participantes confirmadas podem fazer check-in.');let row={meeting_id:m,participant_id:person,confirmed:old?.confirmed||false,checked_in:old?.checked_in||false,suggested_book_id:old?.suggested_book_id||participants.find(p=>p.id===person)?.suggested_book_id||null,...changes};if(row.checked_in)row.confirmed=true;if(!row.confirmed)row.checked_in=false;await query(db.from('attendance').upsert(row,{onConflict:'meeting_id,participant_id'}));await load();}
 async function bulkCheckIn(mark){
@@ -337,8 +359,8 @@ async function saveCover(url){
  if(!admin||!coverBookId)return;
  const u=new URL(url);if(u.protocol!=='https:')throw Error('A imagem deve usar HTTPS.');
  await query(db.from('books').update({cover_url:url}).eq('id',coverBookId));
- coverBookId=null;$('coverEditor').hidden=true;
- await load();notify('Capa salva! Ela aparecerá para todas as integrantes.');
+ coverBookId=null;$('coverEditor').hidden=true;$('coverManager').hidden=true;
+ await load();refreshParticipantCoverControls();notify('Capa salva! Ela aparecerá para todas as integrantes.');
 }
 async function uploadCover(){
  if(!admin||!coverBookId)return;
@@ -364,12 +386,12 @@ document.addEventListener('change',async e=>{
  try{notify('Enviando foto...');await setParticipantPhoto(personId,file)}catch(err){notify('Não foi possível salvar a foto: '+err.message,true)}
  finally{e.target.value=''}
 });
-async function initial(){const logo=$('logo');logo.onerror=()=>{logo.hidden=true};$('setup').hidden=configured;document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));$('loginToggle').onclick=()=>{$('authPanel').hidden=!$('authPanel').hidden;if(!$('authPanel').hidden)$('authPanel').scrollIntoView({behavior:'smooth'})};$('logout').onclick=async()=>{await db.auth.signOut();admin=false;render()};$('loginForm').onsubmit=async e=>{e.preventDefault();if(!db)return notify('Configure o Supabase primeiro.',true);try{await query(db.auth.signInWithPassword({email:$('email').value,password:$('password').value}));await checkAdmin();$('authPanel').hidden=admin;if(!admin)notify('A conta existe, mas não está autorizada como admin.',true);}catch(err){notify('Não foi possível entrar: '+err.message,true)}};
-$('openCoverManager').onclick=showCoverManager;
+async function initial(){const logo=$('logo');logo.onerror=()=>{logo.hidden=true};$('brandHome').onclick=()=>{switchTab('encontros');$('meetingDetail').hidden=true;$('meetingFormPanel').hidden=true;currentMeeting=null;window.scrollTo({top:0,behavior:'smooth'})};$('setup').hidden=configured;document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));$('loginToggle').onclick=()=>{$('authPanel').hidden=!$('authPanel').hidden;if(!$('authPanel').hidden)$('authPanel').scrollIntoView({behavior:'smooth'})};$('logout').onclick=async()=>{await db.auth.signOut();admin=false;render()};$('loginForm').onsubmit=async e=>{e.preventDefault();if(!db)return notify('Configure o Supabase primeiro.',true);try{await query(db.auth.signInWithPassword({email:$('email').value,password:$('password').value}));await checkAdmin();$('authPanel').hidden=admin;if(!admin)notify('A conta existe, mas não está autorizada como admin.',true);}catch(err){notify('Não foi possível entrar: '+err.message,true)}};
+$('searchCoverInEditor').onclick=()=>{const p=participants.find(x=>x.id===$('participantId').value);const b=bookForParticipant(p);if(b)openCoverSearch(b.id)};
  $('closeCoverManager').onclick=()=>{$('coverManager').hidden=true;coverBookId=null};
- $('cancelCover').onclick=()=>{coverBookId=null;$('coverEditor').hidden=true;renderCoverQueue()};
+ $('cancelCover').onclick=()=>{coverBookId=null;$('coverEditor').hidden=true;$('coverManager').hidden=true};
  $('uploadCover').onclick=async()=>{if(coverBusy)return;try{$('uploadCover').disabled=true;await uploadCover()}catch(err){$('coverFeedback').textContent=err.message}finally{$('uploadCover').disabled=false}};
- $('participantBook').addEventListener('input',()=>{$('participantReadWrap').hidden=!$('participantBook').value.trim()});
+ $('participantBook').addEventListener('input',()=>{$('participantReadWrap').hidden=!$('participantBook').value.trim();refreshParticipantCoverControls()});$('participantAuthor').addEventListener('input',refreshParticipantCoverControls);
  $('newParticipant').onclick=()=>participantEditor(null);$('cancelParticipant').onclick=()=>$('participantEditor').hidden=true;$('newMeeting').onclick=()=>meetingEditor(null);$('cancelMeeting').onclick=()=>$('meetingFormPanel').hidden=true;
 $('meetingForm').onsubmit=async e=>{e.preventDefault();try{let old=meetings.find(m=>m.id===$('meetingId').value);let card_url=old?.card_url||'';let file=$('meetingImage').files[0];if(file){if(file.size>5242880)throw Error('O card deve ter até 5 MB.');const ext=file.name.split('.').pop().toLowerCase();const path=`${crypto.randomUUID()}.${ext}`;await query(db.storage.from('meeting-cards').upload(path,file,{contentType:file.type}));card_url=db.storage.from('meeting-cards').getPublicUrl(path).data.publicUrl}const selectedBook=$('meetingBook').value;
  if(selectedBook==='legacy')throw Error('Selecione o livro cadastrado para vincular este encontro.');
