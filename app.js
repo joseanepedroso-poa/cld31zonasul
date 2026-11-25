@@ -21,6 +21,7 @@ function meetingInviteText(m){
  return `Gurias, nosso próximo encontro do Clube de Leitura d’Elas — Grupo 31 Zona Sul! 📚\n\n📖 Livro: ${meetingTitle(m)}${meetingBook(m)?.author?' — '+meetingBook(m).author:''}\n📅 Data e horário: ${date}\n📍 Local: ${m.place||'A definir'}\n👭 Anfitriãs: ${hostsLabel(m)}\n\nMais informações no site do clube:\nhttps://joseanepedroso-poa.github.io/cld31zonasul/`;
 }
 async function shareMeeting(id){
+ if(!admin)return;
  const m=meetings.find(x=>x.id===id);if(!m)return;
  const text=meetingInviteText(m);
  // Abre a conversa do WhatsApp para revisão e envio pela própria participante.
@@ -186,7 +187,7 @@ function celebrateDraw(){
 }
 function hostsLabel(m){const h=participants.find(p=>p.id===m.host_participant_id)?.name||m.host||'A definir';const co=participants.find(p=>p.id===m.co_host_participant_id)?.name||m.co_host;return co?`${h} e ${co}`:h}
 function hostsDetail(m){const h=participants.find(p=>p.id===m.host_participant_id)?.name||m.host||'A definir';const co=participants.find(p=>p.id===m.co_host_participant_id)?.name||m.co_host;return `<p><strong>Anfitriã sorteada:</strong> ${safe(h)}</p>${co?`<p><strong>Anfitriã convidada:</strong> ${safe(co)}</p>`:''}`}
-function meetingCard(m,featured=false){const count=attendance.filter(a=>a.meeting_id===m.id&&a.confirmed).length;return `<article class="meeting-card ${featured?'featured':''}">${m.card_url?`<img src="${safe(m.card_url)}" alt="Card de divulgação do encontro" loading="lazy">`:'<div class="placeholder">Card do encontro em breve</div>'}<div class="content"><div class="eyebrow">${featured?'PRÓXIMA LEITURA':'ENCONTRO'}</div><h3>${safe(meetingTitle(m))}</h3><div class="meta">${safe(fmt(m.starts_at))}<br>Anfitriãs: ${safe(hostsLabel(m))}<br>${safe(m.place||'Local a definir')}</div>${featured&&(!m.starts_at||!m.place||!m.card_url)?'<div class="soon">Em breve, mais informações sobre o encontro.</div>':''}<button class="outline" data-open="${safe(m.id)}">Ver detalhes (${count} confirmada${count===1?'':'s'})</button>${featured?`<button type="button" class="invite-button" data-share-meeting="${safe(m.id)}">Compartilhar convite no WhatsApp</button>`:''}</div></article>`}
+function meetingCard(m,featured=false){const count=attendance.filter(a=>a.meeting_id===m.id&&a.confirmed).length;return `<article class="meeting-card ${featured?'featured':''}">${m.card_url?`<img src="${safe(m.card_url)}" alt="Card de divulgação do encontro" loading="lazy">`:'<div class="placeholder">Card do encontro em breve</div>'}<div class="content"><div class="eyebrow">${featured?'PRÓXIMA LEITURA':'ENCONTRO'}</div><h3>${safe(meetingTitle(m))}</h3><div class="meta">${safe(fmt(m.starts_at))}<br>Anfitriãs: ${safe(hostsLabel(m))}<br>${safe(m.place||'Local a definir')}</div>${featured&&(!m.starts_at||!m.place||!m.card_url)?'<div class="soon">Em breve, mais informações sobre o encontro.</div>':''}<button class="outline" data-open="${safe(m.id)}">Ver detalhes (${count} confirmada${count===1?'':'s'})</button>${featured&&admin?`<button type="button" class="invite-button" data-share-meeting="${safe(m.id)}" aria-label="Compartilhar convite no WhatsApp" title="Compartilhar convite no WhatsApp"><svg class="whatsapp-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 11.7a8 8 0 0 1-11.7 7.1L4 20l1.2-4.3A8 8 0 1 1 20 11.7Z" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linejoin="round"/><path d="M9 8.1c-.3-.6-.5-.6-.8-.6-.3 0-.7.1-1 .5-.4.5-.6 1-.4 1.8.4 1.6 2.2 3.4 3.7 4.2 1.4.7 2.4.8 3 .5.5-.2 1-.8 1.1-1.3 0-.2-.1-.3-.4-.5l-1.6-.8c-.3-.1-.4 0-.6.2l-.6.7c-.2.2-.4.2-.7.1-.7-.3-1.6-1-2.1-1.6-.2-.2-.2-.4 0-.6l.5-.6c.2-.2.2-.4.1-.6Z" fill="currentColor"/></svg><span>WhatsApp</span></button>`:''}</div></article>`}
 function renderMeetings(){
  const selectedMeeting=$('drawMeeting').value;
  const future=meetings.filter(isUpcoming).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
@@ -373,27 +374,66 @@ function openGalleryPhoto(id){
  $('galleryClose').focus({preventScroll:true});
 }
 function closeGalleryPhoto(){const modal=$('galleryModal');if(modal.hidden)return;modal.hidden=true;$('galleryFullImage').removeAttribute('src');document.body.classList.remove('gallery-modal-open');}
-function renderDetail(id){const m=meetings.find(x=>x.id===id);if(!m)return;currentMeeting=id;const a=attendance.filter(x=>x.meeting_id===id);const historical=isPastMeeting(m);let detail=`<div class="panel"><div class="meeting-info"><div>${m.card_url?`<img class="meeting-banner" src="${safe(m.card_url)}" alt="Card do encontro">`:'<div class="placeholder">Encontro do Clube</div>'}</div><div><div class="eyebrow">NOSSO ENCONTRO</div><h2>${safe(meetingTitle(m))}</h2><p>${safe(fmt(m.starts_at))}</p><p><strong>Local:</strong> ${safe(m.place||'A definir')}</p>${hostsDetail(m)}${!historical?`<button type="button" class="invite-button" data-share-meeting="${safe(id)}">Compartilhar convite no WhatsApp</button>`:''}<p><strong>Confirmadas:</strong> ${a.filter(x=>x.confirmed).length} · <strong>Presentes:</strong> ${a.filter(x=>x.checked_in).length}</p>${admin?`<details class="meeting-action-menu"><summary aria-label="Opções de administração do encontro">⋯ Opções</summary><div class="meeting-action-buttons"><button type="button" class="outline" data-edit-meeting="${safe(id)}">Editar encontro</button><button type="button" class="danger" data-delete-meeting="${safe(id)}">Excluir encontro</button></div></details>`:''}</div></div></div>`;
-if(historical)detail+=galleryMarkup(id);
-if(admin&&isPastMeeting(m)){
- detail+=`<div class="panel archive-presence"><div class="eyebrow">ENCONTRO ANTERIOR</div><h3>Registro histórico</h3><p class="muted">O check-in está encerrado. Não é necessário cadastrar presenças dos encontros anteriores.</p></div>`;
-}else if(admin){
- const confirmed=a.filter(x=>x.confirmed).length, present=a.filter(x=>x.checked_in).length;
- detail+=`<div class="panel attendance-panel">
-  <div class="attendance-heading"><div><h3>${attendanceMode==='checkin'?'Check-in do encontro':'Confirmações do encontro'}</h3><p class="muted">${attendanceMode==='checkin'?'Toque na integrante confirmada para registrar a chegada.':'Marque quem confirmou participação antes do encontro.'}</p></div><div class="attendance-count"><strong>${attendanceMode==='checkin'?present:confirmed}</strong><span>${attendanceMode==='checkin'?'presentes':'confirmadas'}</span></div></div>
-  <div class="attendance-modes" role="group" aria-label="Etapa de presença">
-   <button type="button" class="${attendanceMode==='checkin'?'selected':''}" data-attendance-mode="checkin">Check-in</button>
-   <button type="button" class="${attendanceMode==='confirmed'?'selected':''}" data-attendance-mode="confirmed">Confirmações <small>${confirmed}</small></button>
-  </div>
-  <div class="attendance-tools"><input id="attendanceSearch" type="search" placeholder="Buscar integrante..." aria-label="Buscar integrante" value="${safe(attendanceSearch)}"></div>
-  <div class="attendance-summary">${confirmed} confirmadas · ${present} presentes</div>
-  ${attendanceMode==='checkin'?`<div class="attendance-bulk"><button type="button" class="outline" data-attendance-bulk="mark">✓ Marcar todas</button><button type="button" class="quiet" data-attendance-bulk="unmark">Desmarcar todas</button></div>`:''}
-  <div id="attendanceRows" class="attendance-rows"></div>
- </div>`;
-}else{const confirmedPeople=a.filter(x=>x.confirmed).map(x=>participants.find(p=>p.id===x.participant_id)).filter(Boolean);
- const empty=isPastMeeting(m)?'<p class="muted">0 participantes</p>':'<p class="muted">Ainda sem confirmações.</p>';
- detail+=`<div class="panel"><h3>Confirmadas (${confirmedPeople.length})</h3><div class="rows confirmed-people">${confirmedPeople.map(p=>`<div class="public-confirmed">${participantAvatar(p)}<strong>${safe(p.name)}</strong></div>`).join('')||empty}</div></div>`;}
-if(!historical)detail+=galleryMarkup(id);detail+=discussionMarkup(m);$('meetingDetail').innerHTML=detail;$('meetingDetail').hidden=false;if(admin)renderAttendanceRows();}
+// Mantém o estado aberto/fechado quando o conteúdo é atualizado (check-in, perguntas, fotos).
+function meetingSectionState(meetingId){
+ const state={};
+ document.querySelectorAll('#meetingDetail details[data-meeting-section]').forEach(el=>{
+  if(el.dataset.meetingId===meetingId)state[el.dataset.meetingSection]=el.open;
+ });
+ return state;
+}
+function meetingAccordion(meetingId,key,title,content,expanded){
+ const open=expanded?' open':'';
+ return `<details class="meeting-collapse" data-meeting-id="${safe(meetingId)}" data-meeting-section="${safe(key)}"${open}><summary><span>${safe(title)}</span><span class="meeting-collapse-chevron" aria-hidden="true"></span></summary><div class="meeting-collapse-content">${content}</div></details>`;
+}
+function renderDetail(id){
+ const m=meetings.find(x=>x.id===id);if(!m)return;
+ const savedSections=meetingSectionState(id);
+ currentMeeting=id;
+ const a=attendance.filter(x=>x.meeting_id===id);
+ const historical=isPastMeeting(m);
+ const isFeatured=featuredMeeting()?.id===id;
+ const confirmedCount=a.filter(x=>x.confirmed).length;
+ const presentCount=a.filter(x=>x.checked_in).length;
+ let detail=`<div class="panel"><div class="meeting-info"><div>${m.card_url?`<img class="meeting-banner" src="${safe(m.card_url)}" alt="Card do encontro">`:'<div class="placeholder">Encontro do Clube</div>'}</div><div><div class="eyebrow">NOSSO ENCONTRO</div><h2>${safe(meetingTitle(m))}</h2><p>${safe(fmt(m.starts_at))}</p><p><strong>Local:</strong> ${safe(m.place||'A definir')}</p>${hostsDetail(m)}${!historical&&admin?`<button type="button" class="invite-button" data-share-meeting="${safe(id)}" aria-label="Compartilhar convite no WhatsApp" title="Compartilhar convite no WhatsApp"><svg class="whatsapp-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 11.7a8 8 0 0 1-11.7 7.1L4 20l1.2-4.3A8 8 0 1 1 20 11.7Z" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linejoin="round"/><path d="M9 8.1c-.3-.6-.5-.6-.8-.6-.3 0-.7.1-1 .5-.4.5-.6 1-.4 1.8.4 1.6 2.2 3.4 3.7 4.2 1.4.7 2.4.8 3 .5.5-.2 1-.8 1.1-1.3 0-.2-.1-.3-.4-.5l-1.6-.8c-.3-.1-.4 0-.6.2l-.6.7c-.2.2-.4.2-.7.1-.7-.3-1.6-1-2.1-1.6-.2-.2-.2-.4 0-.6l.5-.6c.2-.2.2-.4.1-.6Z" fill="currentColor"/></svg><span>WhatsApp</span></button>`:''}<p><strong>Confirmadas:</strong> ${confirmedCount} · <strong>Presentes:</strong> ${presentCount}</p>${admin?`<details class="meeting-action-menu"><summary aria-label="Opções de administração do encontro">⋯ Opções</summary><div class="meeting-action-buttons"><button type="button" class="outline" data-edit-meeting="${safe(id)}">Editar encontro</button><button type="button" class="danger" data-delete-meeting="${safe(id)}">Excluir encontro</button></div></details>`:''}</div></div></div>`;
+ let confirmedSection='';
+ if(admin&&historical){
+  confirmedSection=`<div class="panel archive-presence"><div class="eyebrow">ENCONTRO ANTERIOR</div><h3>Registro histórico</h3><p class="muted">O check-in está encerrado. Não é necessário cadastrar presenças dos encontros anteriores.</p></div>`;
+ }else if(admin){
+  confirmedSection=`<div class="panel attendance-panel">
+   <div class="attendance-heading"><div><h3>${attendanceMode==='checkin'?'Check-in do encontro':'Confirmações do encontro'}</h3><p class="muted">${attendanceMode==='checkin'?'Toque na integrante confirmada para registrar a chegada.':'Marque quem confirmou participação antes do encontro.'}</p></div><div class="attendance-count"><strong>${attendanceMode==='checkin'?presentCount:confirmedCount}</strong><span>${attendanceMode==='checkin'?'presentes':'confirmadas'}</span></div></div>
+   <div class="attendance-modes" role="group" aria-label="Etapa de presença">
+    <button type="button" class="${attendanceMode==='checkin'?'selected':''}" data-attendance-mode="checkin">Check-in</button>
+    <button type="button" class="${attendanceMode==='confirmed'?'selected':''}" data-attendance-mode="confirmed">Confirmações <small>${confirmedCount}</small></button>
+   </div>
+   <div class="attendance-tools"><input id="attendanceSearch" type="search" placeholder="Buscar integrante..." aria-label="Buscar integrante" value="${safe(attendanceSearch)}"></div>
+   <div class="attendance-summary">${confirmedCount} confirmadas · ${presentCount} presentes</div>
+   ${attendanceMode==='checkin'?`<div class="attendance-bulk"><button type="button" class="outline" data-attendance-bulk="mark">✓ Marcar todas</button><button type="button" class="quiet" data-attendance-bulk="unmark">Desmarcar todas</button></div>`:''}
+   <div id="attendanceRows" class="attendance-rows"></div>
+  </div>`;
+ }else{
+  const confirmedPeople=a.filter(x=>x.confirmed).map(x=>participants.find(p=>p.id===x.participant_id)).filter(Boolean);
+  const empty=historical?'<p class="muted">0 participantes</p>':'<p class="muted">Ainda sem confirmações.</p>';
+  confirmedSection=`<div class="panel"><h3>Confirmadas (${confirmedPeople.length})</h3><div class="rows confirmed-people">${confirmedPeople.map(p=>`<div class="public-confirmed">${participantAvatar(p)}<strong>${safe(p.name)}</strong></div>`).join('')||empty}</div></div>`;
+ }
+ const photos=galleryMarkup(id);
+ const discussion=discussionMarkup(m);
+ if(isFeatured&&!historical){
+  // Próximo encontro: sempre três seções, nesta ordem, inclusive na consulta sem login.
+  const questionsContent=discussion||'<div class="panel discussion-panel"><div class="eyebrow">NOSSA CONVERSA LITERÁRIA</div><h3>Para conversar sobre o livro</h3><p class="muted">As perguntas serão compartilhadas quando estiverem disponíveis.</p></div>';
+  const expanded=(key,defaultValue)=>Object.hasOwn(savedSections,key)?savedSections[key]:defaultValue;
+  detail+=meetingAccordion(id,'confirmed',`Confirmadas (${confirmedCount})`,confirmedSection,expanded('confirmed',true));
+  detail+=meetingAccordion(id,'discussion','Nossa conversa literária',questionsContent,expanded('discussion',false));
+  detail+=meetingAccordion(id,'photos','Momentos do nosso grupo',photos,expanded('photos',false));
+ }else if(historical){
+  detail+=photos+confirmedSection+discussion;
+ }else{
+  detail+=confirmedSection+photos+discussion;
+ }
+ $('meetingDetail').innerHTML=detail;
+ $('meetingDetail').hidden=false;
+ if(admin)renderAttendanceRows();
+}
 function renderAttendanceRows(){
  const root=$('attendanceRows');if(!root||!admin||!currentMeeting||isPastMeeting(meetings.find(m=>m.id===currentMeeting)))return;
  const rows=attendance.filter(a=>a.meeting_id===currentMeeting);
@@ -819,7 +859,7 @@ document.body.addEventListener('click',async e=>{
  }catch(err){notify(err.message,true);await load()}
  finally{attendanceSaving=false;renderAttendanceRows()}
 });
-document.body.addEventListener('click',e=>{const button=e.target.closest('[data-share-meeting]');if(button)shareMeeting(button.dataset.shareMeeting)});
+document.body.addEventListener('click',e=>{const button=e.target.closest('[data-share-meeting]');if(button&&admin)shareMeeting(button.dataset.shareMeeting)});
 document.body.addEventListener('change',e=>{const el=e.target.closest('[data-discussion-publish]');if(el&&admin)updateDiscussionPublication(el.dataset.discussionPublish,el.checked)});
 document.body.addEventListener('submit',e=>{const form=e.target.closest('[data-discussion-form]');if(!form)return;e.preventDefault();if(admin)addDiscussionQuestion(form.dataset.discussionForm,form.elements.question.value)});
 document.body.addEventListener('click',e=>{const edit=e.target.closest('[data-discussion-edit]');const del=e.target.closest('[data-discussion-delete]');if(edit&&admin)editDiscussionQuestion(edit.dataset.discussionEdit);else if(del&&admin)deleteDiscussionQuestion(del.dataset.discussionDelete)});
