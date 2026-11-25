@@ -795,7 +795,12 @@ $('drawMeeting').onchange=renderDraws;$('drawBtn').onclick=runDraw;$('acceptBtn'
 $('resetDraws').onclick=async()=>{if(!admin||rolling)return;if(!confirm('Atenção: reiniciar apaga o histórico de sorteios deste encontro, inclusive resultados confirmados. Deseja continuar?'))return;try{await query(db.from('draws').delete().eq('meeting_id',$('drawMeeting').value));await load()}catch(e){notify(e.message,true)}};
 if(db){await checkAdmin();await load()}}
 async function checkAdmin(){const {data}=await db.auth.getUser();const user=data?.user;admin=false;if(user){try{const rows=await query(db.from('admins').select('user_id').eq('user_id',user.id));admin=rows.length>0}catch(e){console.warn(e)}}render()}
-initial();
+// Aguarda todos os elementos do HTML, incluindo os modais no fim da pagina.
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", () => { initial().catch(err => console.error("Falha ao iniciar o clube:", err)); }, { once: true });
+} else {
+  initial().catch(err => console.error("Falha ao iniciar o clube:", err));
+}
 
 // v1.6.2: modal independente de <dialog>, compatível com navegadores móveis.
 let photoOpener=null;
