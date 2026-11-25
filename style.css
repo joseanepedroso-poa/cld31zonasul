@@ -434,3 +434,57 @@ body.admin-modal-open{overflow:hidden}
 .discussion-form textarea{font:inherit;color:var(--dark);border:1px solid #d9cbd0;border-radius:11px;padding:11px;width:100%;resize:vertical}
 .discussion-form button{justify-self:start}
 @media(max-width:650px){.discussion-panel{padding:16px}.discussion-heading{gap:8px}}
+
+/* v3.1.2 — convite administrativo discreto e seções recolhíveis no próximo encontro */
+.invite-button,.meeting-card .invite-button{display:inline-flex;width:auto;min-height:32px;max-width:100%;align-items:center;justify-content:center;gap:6px;padding:5px 10px;border:1px solid #c7dfd1;border-radius:8px;background:transparent;color:#247650;font-size:.76rem;font-weight:600;line-height:1.2;margin:9px 0 0;box-shadow:none}
+.invite-button:hover,.invite-button:focus-visible{background:#eff9f3;border-color:#91bfa4}
+.whatsapp-mark{width:17px;height:17px;flex:none;display:block}
+.meeting-collapse{margin-top:14px;border:1px solid #e6d7dd;border-radius:16px;overflow:hidden;background:#fff}
+.meeting-collapse>summary{list-style:none;display:flex;justify-content:space-between;align-items:center;gap:12px;cursor:pointer;padding:17px 20px;color:#694255;font-family:'Playfair Display',Georgia,serif;font-size:1.13rem;font-weight:600;user-select:none}
+.meeting-collapse>summary::-webkit-details-marker{display:none}
+.meeting-collapse>summary:hover{background:#fbf7f8}
+.meeting-collapse-chevron{width:9px;height:9px;border-right:2px solid #986f81;border-bottom:2px solid #986f81;transform:rotate(45deg);transition:transform .15s;flex:none}
+.meeting-collapse[open] .meeting-collapse-chevron{transform:rotate(225deg)}
+.meeting-collapse-content{padding:0 12px 12px}
+.meeting-collapse-content>.panel{margin:0;border:0;box-shadow:none;padding:8px 8px 12px}
+.meeting-collapse-content .meeting-gallery{margin-top:0}
+@media(max-width:650px){.meeting-collapse>summary{padding:14px 15px;font-size:1.03rem}.meeting-collapse-content{padding:0 8px 8px}.meeting-collapse-content>.panel{padding:8px 6px 12px}}
+
+
+/* v3.1.3 — destaque delicado para Nossa conversa literária */
+.discussion-panel{
+  background:linear-gradient(145deg,#fbf4f6 0%,#f7edf1 62%,#fcf8f9 100%);
+  border:1px solid #e6ccd7;
+  border-left:4px solid #a87b8f;
+  box-shadow:0 8px 22px rgba(99,53,75,.045);
+}
+.discussion-panel .eyebrow{color:#936277;letter-spacing:.17em}
+.discussion-panel h3{color:#613b50}
+.discussion-panel .discussion-form{border-top-color:#dfc4d0}
+.discussion-panel .discussion-form textarea{background:#fffdfd}
+/* A seção recolhível recebe o mesmo tratamento suave, inclusive fechada. */
+.meeting-collapse[data-meeting-section="discussion"]{
+  border:1px solid #dfc0cd;
+  background:linear-gradient(135deg,#faf1f4,#f8edf1);
+  box-shadow:0 5px 16px rgba(92,51,69,.05);
+}
+.meeting-collapse[data-meeting-section="discussion"]>summary{
+  color:#74465d;
+  background:transparent;
+  border-left:4px solid #a87b8f;
+  padding-left:16px;
+}
+.meeting-collapse[data-meeting-section="discussion"]>summary:hover,
+.meeting-collapse[data-meeting-section="discussion"]>summary:focus-visible{
+  background:#f3e5eb;
+}
+.meeting-collapse[data-meeting-section="discussion"] .meeting-collapse-content{background:transparent}
+.meeting-collapse[data-meeting-section="discussion"] .meeting-collapse-content>.discussion-panel{
+  background:transparent;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+}
+@media(max-width:650px){
+  .meeting-collapse[data-meeting-section="discussion"]>summary{padding-left:11px}
+}
