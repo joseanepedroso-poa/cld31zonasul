@@ -43,13 +43,13 @@ async function loadDiscussion(){
   console.warn('Seção de perguntas ainda não configurada. Execute migration_v31.sql:',e);
  }
 }
-function discussionMarkup(m){
+function discussionMarkup(m, insideAccordion=false){
  if(!discussionAvailable)return admin?'<div class="panel discussion-panel"><h3>Para conversar sobre o livro</h3><p class="muted">Execute migration_v31.sql no Supabase para habilitar as perguntas.</p></div>':'';
  const published=discussionSettings.some(x=>x.meeting_id===m.id&&x.published);
  if(!admin&&!published)return '';
  const questions=discussionQuestions.filter(q=>q.meeting_id===m.id);
  if(!admin&&!questions.length)return '';
- return `<section class="panel discussion-panel" aria-label="Perguntas para discussão"><div class="discussion-heading"><div><div class="eyebrow">NOSSA CONVERSA LITERÁRIA</div><h3>Para conversar sobre o livro</h3></div>${admin?`<span class="discussion-visibility">${published?'Visível para o grupo':'Rascunho privado'}</span>`:''}</div>
+ return `<section class="panel discussion-panel" aria-label="Perguntas para discussão"><div class="discussion-heading"><div>${insideAccordion?'':'<div class="eyebrow">NOSSA CONVERSA LITERÁRIA</div>'}<h3>Para conversar sobre o livro</h3></div>${admin?`<span class="discussion-visibility">${published?'Visível para o grupo':'Rascunho privado'}</span>`:''}</div>
   ${admin?`<label class="discussion-switch"><input type="checkbox" data-discussion-publish="${safe(m.id)}" ${published?'checked':''} ${discussionBusy?'disabled':''}><span>Mostrar perguntas para o grupo</span></label>`:''}
   ${questions.length?`<ol class="discussion-list">${questions.map(q=>`<li><span>${safe(q.question_text)}</span>${admin?`<span class="discussion-item-actions"><button class="outline" type="button" data-discussion-edit="${safe(q.id)}">Editar</button><button class="quiet" type="button" data-discussion-delete="${safe(q.id)}">Excluir</button></span>`:''}</li>`).join('')}</ol>`:'<p class="muted">Nenhuma pergunta cadastrada ainda.</p>'}
   ${admin?`<form class="discussion-form" data-discussion-form="${safe(m.id)}"><label>Nova pergunta ou provocação literária<textarea name="question" rows="2" maxlength="600" placeholder="Que tema ou personagem você gostaria de discutir?" required></textarea></label><button type="submit" class="outline" ${discussionBusy?'disabled':''}>+ Adicionar pergunta</button></form>`:''}</section>`;
@@ -445,13 +445,14 @@ function renderDetail(id){
   confirmedSection=`<div class="panel"><h3>Confirmadas (${confirmedPeople.length})</h3><div class="rows confirmed-people">${confirmedPeople.map(p=>`<div class="public-confirmed">${participantAvatar(p)}<strong>${safe(p.name)}</strong></div>`).join('')||empty}</div></div>`;
  }
  const photos=galleryMarkup(id);
- const discussion=discussionMarkup(m);
+ const discussion=discussionMarkup(m,isFeatured);
  if(isFeatured){
-  // Próximo encontro: sempre três seções, nesta ordem, inclusive na consulta sem login.
-  const questionsContent=discussion||'<div class="panel discussion-panel"><div class="eyebrow">NOSSA CONVERSA LITERÁRIA</div><h3>Para conversar sobre o livro</h3><p class="muted">As perguntas serão compartilhadas quando estiverem disponíveis.</p></div>';
+  // Mostra a seção pública somente quando há perguntas efetivamente publicadas.
+  // Para Admin, mantém o formulário para cadastrar e publicar perguntas.
+  const questionsContent=discussion;
   const expanded=(key,defaultValue)=>Object.hasOwn(savedSections,key)?savedSections[key]:defaultValue;
   detail+=meetingAccordion(id,'confirmed',`Confirmadas (${confirmedCount})`,confirmedSection,expanded('confirmed',true));
-  detail+=meetingAccordion(id,'discussion','Nossa conversa literária',questionsContent,expanded('discussion',false));
+  if(questionsContent)detail+=meetingAccordion(id,'discussion','Nossa conversa literária',questionsContent,expanded('discussion',false));
   detail+=meetingAccordion(id,'photos','Momentos do nosso grupo',photos,expanded('photos',false));
  }else if(historical){
   detail+=photos+confirmedSection+discussion;
