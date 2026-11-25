@@ -8,6 +8,7 @@ let birthdayViewMonth=Number(birthdayToday);
 const birthdayMonthNames=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
 let uploadingMeetingPhotos=false;
 let discussionQuestions=[],discussionSettings=[],discussionAvailable=true,discussionBusy=false;
+let clubActivities=[],activitiesAvailable=true,activityResults={},activityBusy=false,activityPolling=false,activitiesSnapshot='',activityRealtimeChannel=null;
 let coverBookId=null,coverBusy=false,coverOptions=[];
 let attendanceMode='checkin', attendanceSearch='', attendanceOnlyConfirmed=false, attendanceSaving=false;
 let photoTargetId=null,photoSaving=false;
@@ -17,7 +18,7 @@ const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'
 const fmt=x=>x?new Date(x).toLocaleString('pt-BR',{dateStyle:'medium',timeStyle:'short'}):'Data a definir';
 function notify(s,error=false){const el=$('message');el.textContent=s;el.className='notice'+(error?' error':'');el.hidden=false;window.scrollTo({top:0,behavior:'smooth'});}
 async function query(p){const {data,error}=await p;if(error)throw error;return data}
-async function load(){if(!db)return;try{[participants,books,meetings,attendance,draws,meetingPhotos,birthdays]=await Promise.all([query(db.from('participants').select('*').order('name')),query(db.from('books').select('*').order('title')),query(db.from('meetings').select('*').order('starts_at',{ascending:false})),query(db.from('attendance').select('*')),query(db.from('draws').select('*').order('created_at')),query(db.from('meeting_photos').select('*').order('created_at',{ascending:true})),query(db.from('participant_birthdays').select('*'))]);await loadDiscussion();render();}catch(e){notify('Não foi possível carregar os dados: '+e.message,true)}}
+async function load(){if(!db)return;try{[participants,books,meetings,attendance,draws,meetingPhotos,birthdays]=await Promise.all([query(db.from('participants').select('*').order('name')),query(db.from('books').select('*').order('title')),query(db.from('meetings').select('*').order('starts_at',{ascending:false})),query(db.from('attendance').select('*')),query(db.from('draws').select('*').order('created_at')),query(db.from('meeting_photos').select('*').order('created_at',{ascending:true})),query(db.from('participant_birthdays').select('*'))]);await loadDiscussion();await loadClubActivities();render();}catch(e){notify('Não foi possível carregar os dados: '+e.message,true)}}
 // Compartilha apenas as informações já públicas do encontro, sem envio automático.
 function meetingInviteText(m){
  const date=m.starts_at?new Date(m.starts_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'A definir';
@@ -113,7 +114,7 @@ function renderMeetingArchive(screen){
 }
 function openMeetingScreen(id){
  meetingReturnList=['past','planned'].includes(meetingScreen)?meetingScreen:'home';
- renderDetail(id);showMeetingScreen('detail');window.scrollTo({top:0,behavior:'smooth'});
+ renderDetail(id);showMeetingScreen('detail');refreshActivityResults();window.scrollTo({top:0,behavior:'smooth'});
 }
 
 function render(){document.body.classList.toggle('is-admin',admin);if(!admin){document.querySelectorAll('[data-share-meeting]').forEach(b=>b.remove());}if(!admin&&$('coverManager')){$('coverManager').hidden=true;coverBookId=null;}document.querySelectorAll('.admin-only').forEach(el=>{if(!['meetingFormPanel','participantEditor','authPanel','coverManager'].includes(el.id))el.hidden=!admin});$('adminIndicator').hidden=!admin;$('loginToggle').setAttribute('aria-label',admin?'Abrir opções administrativas':'Entrar como administrador');$('loginToggle').title=admin?'Opções administrativas':'Entrar como administrador';$('adminSession').hidden=!admin;$('loginForm').hidden=admin;renderMeetings();renderParticipants();renderDraws();if(currentMeeting)renderDetail(currentMeeting);}
@@ -405,6 +406,7 @@ function meetingSectionIcon(key){
  const icons={
   confirmed:`<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 11.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Zm8 1.3a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4ZM2.8 18.7c.6-2.6 2.7-4.1 5.2-4.1s4.6 1.5 5.2 4.1M12.9 18.7c.4-1.9 2-3.1 4-3.1 1.8 0 3.3.9 4.1 3.1" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   discussion:`<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 17.5V6.8c0-1 .8-1.8 1.8-1.8h10.4c1 0 1.8.8 1.8 1.8v7.4c0 1-.8 1.8-1.8 1.8H10l-3.6 2.7c-.5.3-1.4 0-1.4-.7Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.6 9.2h6.8M8.6 12.2h4.7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`,
+  activities:`<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 19V12m5 7V6m5 13v-9m5 9V4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M2.5 21h19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`,
   photos:`<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.7 7.2h3l1.1-1.7h6.4l1.1 1.7h3c1 0 1.8.8 1.8 1.8v8.5c0 1-.8 1.8-1.8 1.8H4.7c-1 0-1.8-.8-1.8-1.8V9c0-1 .8-1.8 1.8-1.8Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="13.2" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>`
  };
  return icons[key]||'';
@@ -414,6 +416,147 @@ function meetingAccordion(meetingId,key,title,content,expanded){
  const icon=meetingSectionIcon(key);
  return `<details class="meeting-collapse" data-meeting-id="${safe(meetingId)}" data-meeting-section="${safe(key)}"${open}><summary><span class="meeting-collapse-title"><span class="meeting-collapse-icon" aria-hidden="true">${icon}</span><span>${safe(title)}</span></span><span class="meeting-collapse-chevron" aria-hidden="true"></span></summary><div class="meeting-collapse-content">${content}</div></details>`;
 }
+// v3.3 — Roda Literária: rascunhos, publicação imediata e resultados ao vivo.
+const activityKey=id=>'clube31_vote_'+id;
+function voterToken(){
+ try{let token=localStorage.getItem('clube31_voter_token');if(!token){token=crypto.randomUUID();localStorage.setItem('clube31_voter_token',token);}return token;}
+ catch(_){if(!window.__clubVoterToken)window.__clubVoterToken=crypto.randomUUID();return window.__clubVoterToken;}
+}
+function votedLocally(id){try{return localStorage.getItem(activityKey(id))==='1';}catch(_){return !!window['voted_'+id];}}
+function markVoted(id){try{localStorage.setItem(activityKey(id),'1');}catch(_){window['voted_'+id]=true;}}
+async function loadClubActivities(){
+ if(!db)return;
+ try{clubActivities=await query(db.from('club_activities').select('id,meeting_id,question,activity_type,options,status,created_at,updated_at').order('created_at',{ascending:true}));activitiesAvailable=true;}
+ catch(err){clubActivities=[];activitiesAvailable=false;console.warn('Execute migration_v33.sql para habilitar a Roda Literária:',err);}
+}
+function activitiesForMeeting(id){return clubActivities.filter(x=>x.meeting_id===id).sort((a,b)=>((a.status==='live'?0:a.status==='closed'?1:2)-(b.status==='live'?0:b.status==='closed'?1:2))||new Date(b.created_at)-new Date(a.created_at));}
+function activityTypeLabel(type){return type==='cloud'?'Nuvem de palavras':'Múltipla escolha';}
+function activityResultsMarkup(a){
+ return `<div class="activity-results" data-activity-results="${safe(a.id)}"><p class="muted">Carregando resultados...</p></div>`;
+}
+function activityCard(a){
+ const answered=votedLocally(a.id),live=a.status==='live';
+ const options=Array.isArray(a.options)?a.options:[];
+ const canVote=live&&!answered;
+ const choiceFields=a.activity_type==='choice'?`<fieldset class="activity-choices"><legend class="sr-only">Escolha uma resposta</legend>${options.map((opt,i)=>`<label class="activity-choice"><input type="radio" name="answer" value="${safe(opt)}" ${i===0?'required':''}><span>${safe(opt)}</span></label>`).join('')}</fieldset>`:`<label class="activity-word-label">Sua palavra ou expressão curta<input name="answer" type="text" maxlength="45" required autocomplete="off" placeholder="Escreva aqui..."></label>`;
+ return `<article class="live-activity" data-activity-id="${safe(a.id)}"><div class="activity-topline"><span class="activity-type">${activityTypeLabel(a.activity_type)}</span><span class="activity-status ${a.status}">${a.status==='live'?'● Ao vivo':a.status==='draft'?'Rascunho':'Encerrada'}</span></div><h3 class="activity-question">${safe(a.question)}</h3>
+ ${admin?`<div class="activity-admin-actions">${a.status==='draft'?`<button type="button" class="outline" data-activity-open="${safe(a.id)}">Publicar agora</button>`:''}${live?`<button type="button" class="outline" data-activity-close="${safe(a.id)}">Encerrar</button>`:''}<button type="button" class="quiet" data-activity-delete="${safe(a.id)}">Excluir</button></div>`:''}
+ ${canVote?`<form class="activity-vote-form" data-activity-vote="${safe(a.id)}">${choiceFields}<button type="submit">Enviar resposta</button></form>`:''}
+ ${live&&answered?'<p class="activity-answered">✓ Você já respondeu a esta dinâmica neste navegador.</p>':''}
+ ${a.status!=='draft'?`<div class="activity-projection-content"><div class="activity-results-heading"><strong>Resultados ${live?'ao vivo':'finais'}</strong><button type="button" class="quiet activity-project-button" data-activity-project="${safe(a.id)}" aria-label="Exibir resultados em tela cheia">⛶ Tela cheia</button></div>${activityResultsMarkup(a)}</div>`:''}</article>`;
+}
+function activitiesMarkup(m){
+ if(!activitiesAvailable)return admin?'<div class="panel"><p class="muted">Execute migration_v33.sql no Supabase para habilitar a Roda Literária.</p></div>':'';
+ const items=activitiesForMeeting(m.id);
+ if(!admin&&!items.length)return '';
+ const live=items.find(a=>a.status==='live');
+ const form=admin&&!isPastMeeting(m)?`<details class="activity-editor"><summary>+ Criar dinâmica</summary><form data-activity-create="${safe(m.id)}" class="activity-new-form"><label>Tipo de dinâmica<select name="type" data-activity-type><option value="choice">Múltipla escolha</option><option value="cloud">Nuvem de palavras</option></select></label><label>Pergunta<textarea name="question" rows="2" maxlength="240" required placeholder="Qual personagem mais te marcou?"></textarea></label><label data-activity-options>Alternativas — uma por linha<textarea name="options" rows="4" maxlength="500" placeholder="Personagem A&#10;Personagem B&#10;Personagem C"></textarea></label><div class="activity-form-actions"><button type="submit" class="outline" value="draft" name="publish">Salvar rascunho</button><button type="submit" value="live" name="publish">Publicar agora</button></div><p class="muted">Só uma dinâmica pode ficar aberta por encontro. Encerre a atual antes de publicar outra.</p></form></details>`:'';
+ return `<section class="activity-section">${admin?`<p class="muted activity-help">Crie pelo celular, deixe em rascunho ou publique na hora. Os resultados aparecem automaticamente para o grupo.</p>`:''}${live?'':admin?'':'<p class="muted">Dinâmicas encerradas deste encontro.</p>'}${form}<div class="activity-cards">${items.map(activityCard).join('')}</div></section>`;
+}
+async function refreshActivityResults(){
+ if(!db||activityPolling||document.hidden||!currentMeeting||meetingScreen!=='detail')return;
+ activityPolling=true;
+ try{
+  // Consulta a lista pública/administrativa para detectar publicação ou encerramento.
+  const latest=await query(db.from('club_activities').select('id,meeting_id,question,activity_type,options,status,created_at,updated_at').eq('meeting_id',currentMeeting).order('created_at',{ascending:true}));
+  const old=clubActivities.filter(x=>x.meeting_id!==currentMeeting);
+  const oldSignature=JSON.stringify(clubActivities.filter(x=>x.meeting_id===currentMeeting).map(x=>[x.id,x.status,x.question,x.options]));
+  const newSignature=JSON.stringify(latest.map(x=>[x.id,x.status,x.question,x.options]));
+  if(oldSignature!==newSignature){
+    clubActivities=[...old,...latest];
+    const currentOpen=document.querySelector('#meetingDetail details[data-meeting-section="activities"]')?.open;
+    renderDetail(currentMeeting);
+    const section=document.querySelector('#meetingDetail details[data-meeting-section="activities"]');if(section&&currentOpen!==undefined)section.open=currentOpen;
+  }
+  const ids=latest.filter(x=>x.status!=='draft').map(x=>x.id);
+  await Promise.all(ids.map(async id=>{
+    try{const data=await query(db.rpc('club_activity_results',{p_activity_id:id}));activityResults[id]=data;paintActivityResults(id,data);}catch(err){console.warn('Resultado indisponível:',err.message);}
+  }));
+ }catch(err){console.warn('Atualização da Roda Literária:',err.message)}
+ finally{activityPolling=false;}
+}
+function paintActivityResults(id,data){
+ const el=document.querySelector(`[data-activity-results="${id}"]`);if(!el||!data)return;
+ const item=clubActivities.find(x=>x.id===id);if(!item)return;
+ const total=Number(data.total)||0, counts=data.counts||{};
+ let html=`<p class="activity-response-count"><strong>${total}</strong> resposta${total===1?'':'s'}</p>`;
+ if(item.activity_type==='choice'){
+  const options=Array.isArray(item.options)?item.options:[];
+  html+=`<div class="activity-bars">${options.map((opt,i)=>{const count=Number(counts[opt])||0,pct=total?Math.round(count/total*100):0;return `<div class="activity-bar-item"><div class="activity-bar-label"><span>${safe(opt)}</span><strong>${count} · ${pct}%</strong></div><div class="activity-bar-track"><div class="activity-bar-fill" style="width:${pct}%;--bar-index:${i}"></div></div></div>`}).join('')}</div>`;
+ }else{
+  const values=Object.entries(counts).map(([word,count])=>({word,count:Number(count)})).sort((a,b)=>b.count-a.count).slice(0,45);
+  const highest=Math.max(1,...values.map(x=>x.count));
+  html+=values.length?`<div class="activity-cloud" aria-label="Nuvem de palavras">${values.map((v,i)=>`<span class="activity-cloud-word" style="font-size:${(1+v.count/highest*1.3).toFixed(2)}rem;--word-index:${i%4}" title="${v.count} resposta(s)">${safe(v.word)}</span>`).join('')}</div>`:'<p class="muted">As palavras aparecerão aqui conforme forem enviadas.</p>';
+ }
+ // Atualiza os valores sem mexer no formulário onde alguém está digitando.
+ if(el.dataset.rendered!==html){el.innerHTML=html;el.dataset.rendered=html;}
+}
+async function createActivity(form,action){
+ if(!admin||activityBusy)return;
+ const meetingId=form.dataset.activityCreate, type=form.elements.type.value;
+ const question=form.elements.question.value.trim();
+ let options=type==='choice'?form.elements.options.value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean):[];
+ if(!question||question.length>240)return alert('Informe a pergunta (até 240 caracteres).');
+ if(type==='choice'&&(options.length<2||options.length>8||new Set(options.map(x=>x.toLowerCase())).size!==options.length))return alert('Informe de 2 a 8 alternativas diferentes, uma por linha.');
+ if(options.some(x=>x.length>100))return alert('Cada alternativa deve ter no máximo 100 caracteres.');
+ if(action==='live'&&activitiesForMeeting(meetingId).some(x=>x.status==='live'))return alert('Encerre a dinâmica que está ao vivo antes de publicar outra.');
+ activityBusy=true;
+ try{await query(db.from('club_activities').insert({meeting_id:meetingId,question,activity_type:type,options,status:action==='live'?'live':'draft'}));await loadClubActivities();renderDetail(meetingId);await refreshActivityResults();}
+ catch(err){alert('Não foi possível salvar a dinâmica: '+err.message)}finally{activityBusy=false;}
+}
+async function updateActivityStatus(id,status){
+ if(!admin||activityBusy)return;
+ const a=clubActivities.find(x=>x.id===id);if(!a)return;
+ if(status==='live'&&activitiesForMeeting(a.meeting_id).some(x=>x.status==='live'&&x.id!==id))return alert('Encerre a dinâmica atual antes de publicar outra.');
+ if(status==='closed'&&!confirm('Encerrar esta dinâmica? As respostas ficarão no histórico.'))return;
+ activityBusy=true;
+ try{await query(db.from('club_activities').update({status}).eq('id',id));await loadClubActivities();renderDetail(a.meeting_id);await refreshActivityResults();}
+ catch(err){alert('Não foi possível alterar a dinâmica: '+err.message)}finally{activityBusy=false;}
+}
+async function deleteActivity(id){
+ if(!admin||activityBusy)return;
+ const a=clubActivities.find(x=>x.id===id);if(!a||!confirm(`Excluir definitivamente esta dinâmica e todas as respostas?\n\n${a.question}`))return;
+ activityBusy=true;
+ try{await query(db.from('club_activities').delete().eq('id',id));delete activityResults[id];await loadClubActivities();renderDetail(a.meeting_id);}
+ catch(err){alert('Não foi possível excluir: '+err.message)}finally{activityBusy=false;}
+}
+async function voteActivity(form){
+ if(activityBusy)return;
+ const id=form.dataset.activityVote;
+ if(votedLocally(id))return alert('Este navegador já respondeu a esta dinâmica.');
+ const data=new FormData(form),answer=String(data.get('answer')||'').trim();if(!answer)return alert('Escolha ou escreva uma resposta.');
+ const button=form.querySelector('[type=submit]');button.disabled=true;
+ try{await query(db.rpc('club_activity_vote',{p_activity_id:id,p_voter_token:voterToken(),p_answer:answer}));markVoted(id);if(currentMeeting)renderDetail(currentMeeting);await refreshActivityResults();}
+ catch(err){if(/duplicate|unique|já respondeu|already/i.test(err.message)){markVoted(id);if(currentMeeting)renderDetail(currentMeeting);}else alert('Não foi possível enviar a resposta: '+err.message)}
+ finally{if(button.isConnected)button.disabled=false;}
+}
+function toggleActivityProjection(id){
+ const card=document.querySelector(`[data-activity-id="${id}"]`);if(!card)return;
+ if(card.classList.contains('activity-projected')){card.classList.remove('activity-projected');document.body.classList.remove('activity-projection-open');return;}
+ document.querySelectorAll('.activity-projected').forEach(el=>el.classList.remove('activity-projected'));
+ card.classList.add('activity-projected');document.body.classList.add('activity-projection-open');
+}
+function startActivityUpdates(){
+ if(!db)return;
+ if(!window.__clubActivityRefresh){window.__clubActivityRefresh=setInterval(()=>{if(activitiesAvailable)refreshActivityResults()},3000);}
+ if(!activityRealtimeChannel){
+  activityRealtimeChannel=db.channel('club-activities-live').on('postgres_changes',{event:'*',schema:'public',table:'club_activities'},()=>{if(meetingScreen==='detail')refreshActivityResults();}).subscribe();
+ }
+}
+document.body.addEventListener('change',e=>{if(e.target.matches('[data-activity-type]')){const form=e.target.closest('form');const options=form?.querySelector('[data-activity-options]');if(options)options.hidden=e.target.value==='cloud';}});
+document.body.addEventListener('submit',e=>{
+ const create=e.target.closest('[data-activity-create]');if(create){e.preventDefault();createActivity(create,e.submitter?.value==='live'?'live':'draft');return;}
+ const vote=e.target.closest('[data-activity-vote]');if(vote){e.preventDefault();voteActivity(vote);}
+});
+document.body.addEventListener('click',e=>{
+ const open=e.target.closest('[data-activity-open]'),close=e.target.closest('[data-activity-close]'),del=e.target.closest('[data-activity-delete]'),project=e.target.closest('[data-activity-project]');
+ if(open)updateActivityStatus(open.dataset.activityOpen,'live');
+ else if(close)updateActivityStatus(close.dataset.activityClose,'closed');
+ else if(del)deleteActivity(del.dataset.activityDelete);
+ else if(project)toggleActivityProjection(project.dataset.activityProject);
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){document.querySelectorAll('.activity-projected').forEach(el=>el.classList.remove('activity-projected'));document.body.classList.remove('activity-projection-open');}});
+
 function renderDetail(id){
  const m=meetings.find(x=>x.id===id);if(!m)return;
  const savedSections=meetingSectionState(id);
@@ -446,6 +589,7 @@ function renderDetail(id){
  }
  const photos=galleryMarkup(id);
  const discussion=discussionMarkup(m,isFeatured);
+ const activityContent=activitiesMarkup(m);
  if(isFeatured){
   // Mostra a seção pública somente quando há perguntas efetivamente publicadas.
   // Para Admin, mantém o formulário para cadastrar e publicar perguntas.
@@ -453,15 +597,17 @@ function renderDetail(id){
   const expanded=(key,defaultValue)=>Object.hasOwn(savedSections,key)?savedSections[key]:defaultValue;
   detail+=meetingAccordion(id,'confirmed',`Confirmadas (${confirmedCount})`,confirmedSection,expanded('confirmed',true));
   if(questionsContent)detail+=meetingAccordion(id,'discussion','Nossa conversa literária',questionsContent,expanded('discussion',false));
+  if(activityContent)detail+=meetingAccordion(id,'activities','Nossa Roda Literária',activityContent,expanded('activities',!!clubActivities.some(x=>x.meeting_id===id&&x.status==='live')));
   detail+=meetingAccordion(id,'photos','Momentos do nosso grupo',photos,expanded('photos',false));
  }else if(historical){
-  detail+=photos+confirmedSection+discussion;
+  detail+=photos+confirmedSection+discussion+(activityContent?meetingAccordion(id,'activities','Nossa Roda Literária',activityContent,false):'');
  }else{
-  detail+=confirmedSection+photos+discussion;
+  detail+=confirmedSection+photos+discussion+(activityContent?meetingAccordion(id,'activities','Nossa Roda Literária',activityContent,false):'');
  }
  $('meetingDetail').innerHTML=detail;
  $('meetingDetail').hidden=false;
  if(admin)renderAttendanceRows();
+ for(const item of clubActivities.filter(a=>a.meeting_id===id&&a.status!=='draft')){if(activityResults[item.id])paintActivityResults(item.id,activityResults[item.id]);}
 }
 function renderAttendanceRows(){
  const root=$('attendanceRows');if(!root||!admin||!currentMeeting||isPastMeeting(meetings.find(m=>m.id===currentMeeting)))return;
@@ -948,7 +1094,7 @@ $('drawMeeting').onchange=renderDraws;$('drawBtn').onclick=runDraw;$('acceptBtn'
  }catch(e){notify(e.message,true)}
 };
 $('resetDraws').onclick=async()=>{if(!admin||rolling)return;if(!confirm('Atenção: reiniciar apaga o histórico de sorteios deste encontro, inclusive resultados confirmados. Deseja continuar?'))return;try{await query(db.from('draws').delete().eq('meeting_id',$('drawMeeting').value));await load()}catch(e){notify(e.message,true)}};
-if(db){await checkAdmin();await load()}}
+if(db){await checkAdmin();await load();startActivityUpdates();}}
 async function checkAdmin(){const {data}=await db.auth.getUser();const user=data?.user;admin=false;if(user){try{const rows=await query(db.from('admins').select('user_id').eq('user_id',user.id));admin=rows.length>0}catch(e){console.warn(e)}}await loadDiscussion();render()}
 // Aguarda todos os elementos do HTML, incluindo os modais no fim da pagina.
 if (document.readyState === "loading") {
