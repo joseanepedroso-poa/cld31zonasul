@@ -55,8 +55,8 @@ async function updateDiscussionPublication(meetingId,published){
  discussionBusy=true;
  try{
   await query(db.from('meeting_discussion_settings').upsert({meeting_id:meetingId,published},{onConflict:'meeting_id'}));
-  await loadDiscussion();renderDetail(meetingId);
- }catch(e){notify('Erro ao alterar a publicação: '+e.message,true);renderDetail(meetingId)}finally{discussionBusy=false;}
+  await loadDiscussion();discussionBusy=false;renderDetail(meetingId);
+ }catch(e){discussionBusy=false;notify('Erro ao alterar a publicação: '+e.message,true);renderDetail(meetingId)}finally{discussionBusy=false;}
 }
 async function addDiscussionQuestion(meetingId,text){
  if(!admin||discussionBusy||!text.trim())return;
@@ -64,8 +64,8 @@ async function addDiscussionQuestion(meetingId,text){
  try{
   const order=discussionQuestions.filter(q=>q.meeting_id===meetingId).reduce((max,q)=>Math.max(max,q.sort_order||0),0)+1;
   await query(db.from('meeting_discussion_questions').insert({meeting_id:meetingId,question_text:text.trim(),sort_order:order}));
-  await loadDiscussion();renderDetail(meetingId);
- }catch(e){notify('Não foi possível salvar a pergunta: '+e.message,true)}finally{discussionBusy=false;}
+  await loadDiscussion();discussionBusy=false;renderDetail(meetingId);
+ }catch(e){discussionBusy=false;notify('Não foi possível salvar a pergunta: '+e.message,true)}finally{discussionBusy=false;}
 }
 async function editDiscussionQuestion(id){
  if(!admin||discussionBusy)return;
@@ -74,13 +74,13 @@ async function editDiscussionQuestion(id){
  if(text===null)return;
  if(!text.trim()||text.length>600)return alert('A pergunta precisa ter entre 1 e 600 caracteres.');
  discussionBusy=true;
- try{await query(db.from('meeting_discussion_questions').update({question_text:text.trim()}).eq('id',id));await loadDiscussion();renderDetail(q.meeting_id)}catch(e){notify(e.message,true)}finally{discussionBusy=false}
+ try{await query(db.from('meeting_discussion_questions').update({question_text:text.trim()}).eq('id',id));await loadDiscussion();discussionBusy=false;renderDetail(q.meeting_id)}catch(e){discussionBusy=false;notify(e.message,true)}finally{discussionBusy=false}
 }
 async function deleteDiscussionQuestion(id){
  if(!admin||discussionBusy)return;
  const q=discussionQuestions.find(x=>x.id===id);if(!q||!confirm('Excluir esta pergunta de discussão?'))return;
  discussionBusy=true;
- try{await query(db.from('meeting_discussion_questions').delete().eq('id',id));await loadDiscussion();renderDetail(q.meeting_id)}catch(e){notify(e.message,true)}finally{discussionBusy=false}
+ try{await query(db.from('meeting_discussion_questions').delete().eq('id',id));await loadDiscussion();discussionBusy=false;renderDetail(q.meeting_id)}catch(e){discussionBusy=false;notify(e.message,true)}finally{discussionBusy=false}
 }
 function switchTab(t){document.querySelectorAll('.tab').forEach(el=>el.hidden=el.id!==`tab-${t}`);document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));if(t==='encontros'&&meetingScreen!=='home'){showMeetingScreen('home');}}
 function showMeetingScreen(screen,back=null){
