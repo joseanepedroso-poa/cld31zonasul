@@ -488,3 +488,6 @@ body.admin-modal-open{overflow:hidden}
 @media(max-width:650px){
   .meeting-collapse[data-meeting-section="discussion"]>summary{padding-left:11px}
 }
+
+/* 3.1.4: WhatsApp permanece oculto na visualização pública, também durante transições de sessão. */
+body:not(.is-admin) .admin-invite-only{display:none!important}
