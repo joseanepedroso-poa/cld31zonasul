@@ -7,6 +7,7 @@ let uploadingMeetingPhotos=false;
 let coverBookId=null,coverBusy=false,coverOptions=[];
 let attendanceMode='checkin', attendanceSearch='', attendanceOnlyConfirmed=false, attendanceSaving=false;
 let photoTargetId=null,photoSaving=false;
+let pendingDeleteMeetingId=null, deletingMeeting=false, adminModalPreviousFocus=null;
 let meetingScreen='home', meetingReturnScreen='home', meetingReturnList='home';
 const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=x=>x?new Date(x).toLocaleString('pt-BR',{dateStyle:'medium',timeStyle:'short'}):'Data a definir';
@@ -43,7 +44,7 @@ function openMeetingScreen(id){
  renderDetail(id);showMeetingScreen('detail');window.scrollTo({top:0,behavior:'smooth'});
 }
 
-function render(){if(!admin&&$('coverManager')){$('coverManager').hidden=true;coverBookId=null;}document.querySelectorAll('.admin-only').forEach(el=>{if(!['meetingFormPanel','participantEditor','authPanel','coverManager'].includes(el.id))el.hidden=!admin});$('adminIndicator').hidden=!admin;$('loginToggle').setAttribute('aria-label',admin?'Abrir opções administrativas':'Entrar como administrador');$('loginToggle').title=admin?'Opções administrativas':'Entrar como administrador';$('logout').hidden=!admin;$('loginForm').hidden=admin;renderMeetings();renderParticipants();renderDraws();if(currentMeeting)renderDetail(currentMeeting);}
+function render(){if(!admin&&$('coverManager')){$('coverManager').hidden=true;coverBookId=null;}document.querySelectorAll('.admin-only').forEach(el=>{if(!['meetingFormPanel','participantEditor','authPanel','coverManager'].includes(el.id))el.hidden=!admin});$('adminIndicator').hidden=!admin;$('loginToggle').setAttribute('aria-label',admin?'Abrir opções administrativas':'Entrar como administrador');$('loginToggle').title=admin?'Opções administrativas':'Entrar como administrador';$('adminSession').hidden=!admin;$('loginForm').hidden=admin;renderMeetings();renderParticipants();renderDraws();if(currentMeeting)renderDetail(currentMeeting);}
 function localDay(value){if(!value)return null;const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(value));const get=type=>parts.find(part=>part.type===type)?.value||'';return `${get('year')}-${get('month')}-${get('day')}`;}
 function isPastMeeting(m){return !!m?.starts_at&&localDay(m.starts_at)<localDay(new Date());}
 function isUpcoming(m){return !!m?.starts_at&&!isPastMeeting(m);}
@@ -304,7 +305,7 @@ function openGalleryPhoto(id){
  $('galleryClose').focus({preventScroll:true});
 }
 function closeGalleryPhoto(){const modal=$('galleryModal');if(modal.hidden)return;modal.hidden=true;$('galleryFullImage').removeAttribute('src');document.body.classList.remove('gallery-modal-open');}
-function renderDetail(id){const m=meetings.find(x=>x.id===id);if(!m)return;currentMeeting=id;const a=attendance.filter(x=>x.meeting_id===id);const historical=isPastMeeting(m);let detail=`<div class="panel"><div class="meeting-info"><div>${m.card_url?`<img class="meeting-banner" src="${safe(m.card_url)}" alt="Card do encontro">`:'<div class="placeholder">Encontro do Clube</div>'}</div><div><div class="eyebrow">NOSSO ENCONTRO</div><h2>${safe(meetingTitle(m))}</h2><p>${safe(fmt(m.starts_at))}</p><p><strong>Local:</strong> ${safe(m.place||'A definir')}</p>${hostsDetail(m)}<p><strong>Confirmadas:</strong> ${a.filter(x=>x.confirmed).length} · <strong>Presentes:</strong> ${a.filter(x=>x.checked_in).length}</p>${admin?`<button class="outline" data-edit-meeting="${safe(id)}">Editar encontro</button>`:''}</div></div></div>`;
+function renderDetail(id){const m=meetings.find(x=>x.id===id);if(!m)return;currentMeeting=id;const a=attendance.filter(x=>x.meeting_id===id);const historical=isPastMeeting(m);let detail=`<div class="panel"><div class="meeting-info"><div>${m.card_url?`<img class="meeting-banner" src="${safe(m.card_url)}" alt="Card do encontro">`:'<div class="placeholder">Encontro do Clube</div>'}</div><div><div class="eyebrow">NOSSO ENCONTRO</div><h2>${safe(meetingTitle(m))}</h2><p>${safe(fmt(m.starts_at))}</p><p><strong>Local:</strong> ${safe(m.place||'A definir')}</p>${hostsDetail(m)}<p><strong>Confirmadas:</strong> ${a.filter(x=>x.confirmed).length} · <strong>Presentes:</strong> ${a.filter(x=>x.checked_in).length}</p>${admin?`<details class="meeting-action-menu"><summary aria-label="Opções de administração do encontro">⋯ Opções</summary><div class="meeting-action-buttons"><button type="button" class="outline" data-edit-meeting="${safe(id)}">Editar encontro</button><button type="button" class="danger" data-delete-meeting="${safe(id)}">Excluir encontro</button></div></details>`:''}</div></div></div>`;
 if(historical)detail+=galleryMarkup(id);
 if(admin&&isPastMeeting(m)){
  detail+=`<div class="panel archive-presence"><div class="eyebrow">ENCONTRO ANTERIOR</div><h3>Registro histórico</h3><p class="muted">O check-in está encerrado. Não é necessário cadastrar presenças dos encontros anteriores.</p></div>`;
@@ -637,7 +638,64 @@ document.addEventListener('change',async e=>{
  try{notify('Enviando foto...');await setParticipantPhoto(personId,file)}catch(err){notify('Não foi possível salvar a foto: '+err.message,true)}
  finally{e.target.value=''}
 });
-async function initial(){const logo=$('logo');logo.onerror=()=>{logo.hidden=true};$('brandHome').onclick=()=>{switchTab('encontros');showMeetingScreen('home');window.scrollTo({top:0,behavior:'smooth'})};$('setup').hidden=configured;document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));$('loginToggle').onclick=()=>{$('authPanel').hidden=!$('authPanel').hidden;if(!$('authPanel').hidden)$('authPanel').scrollIntoView({behavior:'smooth'})};$('logout').onclick=async()=>{await db.auth.signOut();admin=false;render()};$('loginForm').onsubmit=async e=>{e.preventDefault();if(!db)return notify('Configure o Supabase primeiro.',true);try{await query(db.auth.signInWithPassword({email:$('email').value,password:$('password').value}));await checkAdmin();$('authPanel').hidden=admin;if(!admin)notify('A conta existe, mas não está autorizada como admin.',true);}catch(err){notify('Não foi possível entrar: '+err.message,true)}};
+function adminModalState(open){
+ $('authPanel').hidden=!open;
+ document.body.classList.toggle('admin-modal-open',open||!$('deleteMeetingModal').hidden);
+}
+function showAdminError(message){$('authError').textContent=message;$('authError').hidden=!message;}
+function openAdminModal(){
+ adminModalPreviousFocus=document.activeElement;
+ showAdminError('');$('adminSession').hidden=!admin;$('loginForm').hidden=admin;
+ adminModalState(true);
+ requestAnimationFrame(()=>{(admin?$('logout'):$('email')).focus({preventScroll:true})});
+}
+function closeAdminModal(){
+ adminModalState(false);$('loginForm').reset();showAdminError('');
+ if(adminModalPreviousFocus?.isConnected)adminModalPreviousFocus.focus({preventScroll:true});
+ adminModalPreviousFocus=null;
+}
+function openDeleteMeeting(id){
+ if(!admin||deletingMeeting)return;
+ const m=meetings.find(item=>item.id===id);if(!m)return;
+ pendingDeleteMeetingId=id;adminModalPreviousFocus=document.activeElement;
+ $('deleteMeetingDescription').textContent=`Deseja excluir o encontro “${meetingTitle(m)}”, de ${fmt(m.starts_at)}?`;
+ $('deleteMeetingError').hidden=true;$('deleteMeetingModal').hidden=false;
+ document.body.classList.add('admin-modal-open');
+ requestAnimationFrame(()=>$('deleteMeetingCancel').focus({preventScroll:true}));
+}
+function closeDeleteMeeting(){
+ if(deletingMeeting)return;
+ $('deleteMeetingModal').hidden=true;document.body.classList.remove('admin-modal-open');
+ pendingDeleteMeetingId=null;
+ if(adminModalPreviousFocus?.isConnected)adminModalPreviousFocus.focus({preventScroll:true});
+ adminModalPreviousFocus=null;
+}
+async function deleteSelectedMeeting(){
+ const id=pendingDeleteMeetingId;
+ if(!admin||!id||deletingMeeting)return;
+ const meeting=meetings.find(m=>m.id===id);if(!meeting)return;
+ deletingMeeting=true;$('deleteMeetingConfirm').disabled=true;
+ $('deleteMeetingError').hidden=true;
+ try{
+  // O RPC preserva os outros encontros e remove as relações em uma transação.
+  await query(db.rpc('delete_club_meeting',{p_meeting_id:id}));
+  const galleryPaths=meetingPhotos.filter(p=>p.meeting_id===id).map(p=>p.storage_path);
+  // Somente objetos do encontro removido; arquivos dos outros encontros são preservados.
+  const cleanups=[];
+  if(galleryPaths.length)cleanups.push(db.storage.from('meeting-gallery').remove(galleryPaths));
+  const card=meeting.card_url||'';
+  const prefix=(cfg.supabaseUrl||'').replace(/\/$/,'')+'/storage/v1/object/public/meeting-cards/';
+  if(card.startsWith(prefix))cleanups.push(db.storage.from('meeting-cards').remove([decodeURIComponent(card.slice(prefix.length).split('?')[0])]));
+  const results=await Promise.allSettled(cleanups);
+  const storageFailed=results.some(r=>r.status==='rejected'||r.value?.error);
+  $('deleteMeetingModal').hidden=true;document.body.classList.remove('admin-modal-open');
+  pendingDeleteMeetingId=null;adminModalPreviousFocus=null;
+  meetingScreen='home';showMeetingScreen('home');await load();
+  notify(storageFailed?'Encontro excluído. Alguns arquivos não puderam ser removidos do armazenamento.':'Encontro excluído com sucesso.');
+ }catch(e){$('deleteMeetingError').textContent='Não foi possível excluir: '+e.message;$('deleteMeetingError').hidden=false;}
+ finally{deletingMeeting=false;$('deleteMeetingConfirm').disabled=false;}
+}
+async function initial(){const logo=$('logo');logo.onerror=()=>{logo.hidden=true};$('brandHome').onclick=()=>{switchTab('encontros');showMeetingScreen('home');window.scrollTo({top:0,behavior:'smooth'})};$('setup').hidden=configured;document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));$('loginToggle').onclick=()=>openAdminModal();$('authClose').onclick=closeAdminModal;$('authCancel').onclick=closeAdminModal;document.querySelectorAll('[data-close-admin]').forEach(el=>el.onclick=closeAdminModal);$('logout').onclick=async()=>{if(!db)return;try{await query(db.auth.signOut());admin=false;closeAdminModal();render();}catch(err){showAdminError('Não foi possível sair: '+err.message)}};$('loginForm').onsubmit=async e=>{e.preventDefault();if(!db)return showAdminError('Configure o Supabase primeiro.');const submit=$('loginSubmit');submit.disabled=true;showAdminError('');try{await query(db.auth.signInWithPassword({email:$('email').value,password:$('password').value}));await checkAdmin();if(admin){closeAdminModal();}else{await db.auth.signOut();showAdminError('Esta conta não possui permissão de administração.');}}catch(err){showAdminError('Não foi possível entrar: '+err.message)}finally{submit.disabled=false}};$('deleteMeetingClose').onclick=closeDeleteMeeting;$('deleteMeetingCancel').onclick=closeDeleteMeeting;document.querySelectorAll('[data-cancel-delete]').forEach(el=>el.onclick=closeDeleteMeeting);$('deleteMeetingConfirm').onclick=deleteSelectedMeeting;document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('deleteMeetingModal').hidden)closeDeleteMeeting();else if(!$('authPanel').hidden)closeAdminModal()}});
 $('searchCoverInEditor').onclick=()=>{const p=participants.find(x=>x.id===$('participantId').value);const b=bookForParticipant(p);if(b)openCoverSearch(b.id)};
  $('closeCoverManager').onclick=()=>{$('coverManager').hidden=true;coverBookId=null};
  $('cancelCover').onclick=()=>{coverBookId=null;$('coverEditor').hidden=true;$('coverManager').hidden=true};
@@ -700,6 +758,7 @@ document.body.addEventListener('input',e=>{
  const el=$('attendanceSearch');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length)}
 });
 document.body.addEventListener('click',e=>{
+ const del=e.target.closest('[data-delete-meeting]');if(del&&admin){openDeleteMeeting(del.dataset.deleteMeeting);return;}
  const go=e.target.closest('[data-meeting-go]');if(go){meetingNavigate(go.dataset.meetingGo);return}
  const back=e.target.closest('[data-meeting-back]');if(back){let target=back.dataset.meetingBack==='home'?'home':meetingScreen==='edit'?meetingReturnScreen:meetingReturnList; if(target==='detail'&&currentMeeting)renderDetail(currentMeeting);meetingNavigate(target);}
 });
