@@ -2,7 +2,10 @@
 const $=id=>document.getElementById(id), cfg=window.CLUBE_CONFIG||{};
 const configured=!!(cfg.supabaseUrl&&cfg.supabasePublishableKey&&window.supabase);
 const db=configured?window.supabase.createClient(cfg.supabaseUrl,cfg.supabasePublishableKey):null;
-let admin=false,participants=[],books=[],meetings=[],attendance=[],draws=[],meetingPhotos=[],currentMeeting=null,rolling=false;
+let admin=false,participants=[],books=[],meetings=[],attendance=[],draws=[],meetingPhotos=[],birthdays=[],currentMeeting=null,rolling=false;
+const birthdayToday=new Intl.DateTimeFormat('en-US',{timeZone:'America/Sao_Paulo',month:'numeric'}).format(new Date());
+let birthdayViewMonth=Number(birthdayToday);
+const birthdayMonthNames=['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
 let uploadingMeetingPhotos=false;
 let discussionQuestions=[],discussionSettings=[],discussionAvailable=true,discussionBusy=false;
 let coverBookId=null,coverBusy=false,coverOptions=[];
@@ -14,7 +17,7 @@ const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'
 const fmt=x=>x?new Date(x).toLocaleString('pt-BR',{dateStyle:'medium',timeStyle:'short'}):'Data a definir';
 function notify(s,error=false){const el=$('message');el.textContent=s;el.className='notice'+(error?' error':'');el.hidden=false;window.scrollTo({top:0,behavior:'smooth'});}
 async function query(p){const {data,error}=await p;if(error)throw error;return data}
-async function load(){if(!db)return;try{[participants,books,meetings,attendance,draws,meetingPhotos]=await Promise.all([query(db.from('participants').select('*').order('name')),query(db.from('books').select('*').order('title')),query(db.from('meetings').select('*').order('starts_at',{ascending:false})),query(db.from('attendance').select('*')),query(db.from('draws').select('*').order('created_at')),query(db.from('meeting_photos').select('*').order('created_at',{ascending:true}))]);await loadDiscussion();render();}catch(e){notify('Não foi possível carregar os dados: '+e.message,true)}}
+async function load(){if(!db)return;try{[participants,books,meetings,attendance,draws,meetingPhotos,birthdays]=await Promise.all([query(db.from('participants').select('*').order('name')),query(db.from('books').select('*').order('title')),query(db.from('meetings').select('*').order('starts_at',{ascending:false})),query(db.from('attendance').select('*')),query(db.from('draws').select('*').order('created_at')),query(db.from('meeting_photos').select('*').order('created_at',{ascending:true})),query(db.from('participant_birthdays').select('*'))]);await loadDiscussion();render();}catch(e){notify('Não foi possível carregar os dados: '+e.message,true)}}
 // Compartilha apenas as informações já públicas do encontro, sem envio automático.
 function meetingInviteText(m){
  const date=m.starts_at?new Date(m.starts_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'A definir';
@@ -187,7 +190,7 @@ function celebrateDraw(){
 }
 function hostsLabel(m){const h=participants.find(p=>p.id===m.host_participant_id)?.name||m.host||'A definir';const co=participants.find(p=>p.id===m.co_host_participant_id)?.name||m.co_host;return co?`${h} e ${co}`:h}
 function hostsDetail(m){const h=participants.find(p=>p.id===m.host_participant_id)?.name||m.host||'A definir';const co=participants.find(p=>p.id===m.co_host_participant_id)?.name||m.co_host;return `<p><strong>Anfitriã sorteada:</strong> ${safe(h)}</p>${co?`<p><strong>Anfitriã convidada:</strong> ${safe(co)}</p>`:''}`}
-function meetingCard(m,featured=false){const count=attendance.filter(a=>a.meeting_id===m.id&&a.confirmed).length;return `<article class="meeting-card ${featured?'featured':''}">${m.card_url?`<img src="${safe(m.card_url)}" alt="Card de divulgação do encontro" loading="lazy">`:'<div class="placeholder">Card do encontro em breve</div>'}<div class="content"><div class="eyebrow">${featured?'PRÓXIMA LEITURA':'ENCONTRO'}</div><h3>${safe(meetingTitle(m))}</h3><div class="meta">${safe(fmt(m.starts_at))}<br>Anfitriãs: ${safe(hostsLabel(m))}<br>${safe(m.place||'Local a definir')}</div>${featured&&(!m.starts_at||!m.place||!m.card_url)?'<div class="soon">Em breve, mais informações sobre o encontro.</div>':''}<button class="outline" data-open="${safe(m.id)}">Ver detalhes (${count} confirmada${count===1?'':'s'})</button>${featured&&admin?`<button type="button" class="invite-button admin-invite-only" data-share-meeting="${safe(m.id)}" aria-label="Compartilhar convite no WhatsApp" title="Compartilhar convite no WhatsApp"><svg class="whatsapp-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 11.7a8 8 0 0 1-11.7 7.1L4 20l1.2-4.3A8 8 0 1 1 20 11.7Z" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linejoin="round"/><path d="M9 8.1c-.3-.6-.5-.6-.8-.6-.3 0-.7.1-1 .5-.4.5-.6 1-.4 1.8.4 1.6 2.2 3.4 3.7 4.2 1.4.7 2.4.8 3 .5.5-.2 1-.8 1.1-1.3 0-.2-.1-.3-.4-.5l-1.6-.8c-.3-.1-.4 0-.6.2l-.6.7c-.2.2-.4.2-.7.1-.7-.3-1.6-1-2.1-1.6-.2-.2-.2-.4 0-.6l.5-.6c.2-.2.2-.4.1-.6Z" fill="currentColor"/></svg><span>WhatsApp</span></button>`:''}</div></article>`}
+function meetingCard(m,featured=false){const count=attendance.filter(a=>a.meeting_id===m.id&&a.confirmed).length;return `<article class="meeting-card ${featured?'featured':''}">${m.card_url?`<img src="${safe(m.card_url)}" alt="Card de divulgação do encontro" loading="lazy">`:'<div class="placeholder">Card do encontro em breve</div>'}<div class="content"><div class="eyebrow">${featured?'PRÓXIMA LEITURA':'ENCONTRO'}</div><div class="meeting-title-share"><h3>${safe(meetingTitle(m))}</h3>${featured&&admin?`<button type="button" class="invite-button admin-invite-only" data-share-meeting="${safe(m.id)}" aria-label="Compartilhar convite no WhatsApp" title="Compartilhar convite no WhatsApp"><svg class="whatsapp-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 11.7a8 8 0 0 1-11.7 7.1L4 20l1.2-4.3A8 8 0 1 1 20 11.7Z" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linejoin="round"/><path d="M9 8.1c-.3-.6-.5-.6-.8-.6-.3 0-.7.1-1 .5-.4.5-.6 1-.4 1.8.4 1.6 2.2 3.4 3.7 4.2 1.4.7 2.4.8 3 .5.5-.2 1-.8 1.1-1.3 0-.2-.1-.3-.4-.5l-1.6-.8c-.3-.1-.4 0-.6.2l-.6.7c-.2.2-.4.2-.7.1-.7-.3-1.6-1-2.1-1.6-.2-.2-.2-.4 0-.6l.5-.6c.2-.2.2-.4.1-.6Z" fill="currentColor"/></svg></button>`:''}</div><div class="meta">${safe(fmt(m.starts_at))}<br>Anfitriãs: ${safe(hostsLabel(m))}<br>${safe(m.place||'Local a definir')}</div>${featured&&(!m.starts_at||!m.place||!m.card_url)?'<div class="soon">Em breve, mais informações sobre o encontro.</div>':''}<button class="outline" data-open="${safe(m.id)}">Ver detalhes (${count} confirmada${count===1?'':'s'})</button></div></article>`}
 function renderMeetings(){
  const selectedMeeting=$('drawMeeting').value;
  const future=meetings.filter(isUpcoming).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
@@ -233,7 +236,19 @@ function photoUrl(person){
  try{let u=new URL(src);return u.protocol==='https:'?u.href:''}catch{return ''}
 }
 function participantAvatar(p){const src=photoUrl(p);const inner=src?`<img loading="lazy" src="${safe(src)}" alt="Foto de ${safe(p.name)}" referrerpolicy="no-referrer" onerror="this.hidden=true;this.nextElementSibling.hidden=false"><span class="member-initials" hidden aria-hidden="true">${safe(initialsFor(p.name))}</span>`:`<span class="member-initials" aria-hidden="true">${safe(initialsFor(p.name))}</span>`;return src?`<button type="button" class="member-avatar member-avatar-button" data-enlarge-photo="${safe(p.id)}" aria-label="Ampliar foto de ${safe(p.name)}" title="Ver foto inteira">${inner}</button>`:`<div class="member-avatar">${inner}</div>`}
+function birthdayForParticipant(id){return birthdays.find(b=>b.participant_id===id)||null}
+function renderBirthdayMonth(){
+ const root=$('birthdayMonth');if(!root)return;
+ const items=birthdays.filter(b=>b.show_public&&Number(b.birth_month)===birthdayViewMonth)
+  .map(b=>({birthday:b,participant:participants.find(p=>p.id===b.participant_id)}))
+  .filter(item=>item.participant?.active)
+  .sort((a,b)=>Number(a.birthday.birth_day)-Number(b.birthday.birth_day)||a.participant.name.localeCompare(b.participant.name,'pt-BR'));
+ const month=birthdayMonthNames[birthdayViewMonth-1];
+ root.innerHTML=`<div class="birthday-header"><div><div class="eyebrow">DATAS PARA CELEBRAR</div><h3><svg class="birthday-heading-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 10.5h14v9H5zM4 10.5h16M12 10.5v9M7.5 6.2c-2.5-2.5-4.9 2.7 2 4.3H12c-4-1.9-2.4-6.8.7-5.4 1.2.6 1.9 1.6 2.3 2.7"/></svg>Aniversariantes de ${safe(month)}</h3></div><div class="birthday-month-nav"><button type="button" data-birthday-change="-1" aria-label="Mês anterior" title="Mês anterior">‹</button><button type="button" data-birthday-change="1" aria-label="Próximo mês" title="Próximo mês">›</button></div></div>
+ ${items.length?`<div class="birthday-list">${items.map(({participant:p,birthday:b})=>`<div class="birthday-person">${participantAvatar(p)}<div><strong>${safe(p.name)}</strong><span>${String(b.birth_day).padStart(2,'0')} de ${safe(month)}</span></div></div>`).join('')}</div>`:'<p class="muted birthday-empty">Nenhuma aniversariante com data divulgada neste mês.</p>'}`;
+}
 function renderParticipants(){
+ renderBirthdayMonth();
  const visible=admin?participants:participants.filter(p=>p.active);
  $('participantList').innerHTML=visible.length?visible.map(p=>{
    const b=bookForParticipant(p);
@@ -301,6 +316,10 @@ function refreshParticipantCoverControls(){
 function participantEditor(p){
  if(!admin)return;
  $('participantEditor').hidden=false;$('participantId').value=p?.id||'';$('participantName').value=p?.name||'';
+ const birthday=p?birthdayForParticipant(p.id):null;
+ $('participantBirthdayDay').value=birthday?.birth_day||'';
+ $('participantBirthdayMonth').value=birthday?.birth_month||'';
+ $('participantBirthdayPublic').checked=!!birthday?.show_public;
  const b=bookForParticipant(p);$('participantBook').value=b?.title||'';$('participantAuthor').value=b?.author||'';
  $('participantRead').checked=!!b?.read_by_club;$('participantReadWrap').hidden=!b;
  $('participantFormHeading').textContent=p?'Editar integrante e indicação':'Cadastrar integrante e livro';
@@ -812,7 +831,7 @@ async function deleteSelectedMeeting(){
  }catch(e){$('deleteMeetingError').textContent='Não foi possível excluir: '+e.message;$('deleteMeetingError').hidden=false;}
  finally{deletingMeeting=false;$('deleteMeetingConfirm').disabled=false;}
 }
-async function initial(){const logo=$('logo');logo.onerror=()=>{logo.hidden=true};$('brandHome').onclick=()=>{switchTab('encontros');showMeetingScreen('home');window.scrollTo({top:0,behavior:'smooth'})};$('setup').hidden=configured;document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));$('loginToggle').onclick=()=>openAdminModal();$('authClose').onclick=closeAdminModal;$('authCancel').onclick=closeAdminModal;document.querySelectorAll('[data-close-admin]').forEach(el=>el.onclick=closeAdminModal);$('logout').onclick=async()=>{if(!db)return;try{await query(db.auth.signOut());admin=false;await loadDiscussion();closeAdminModal();render();}catch(err){showAdminError('Não foi possível sair: '+err.message)}};$('loginForm').onsubmit=async e=>{e.preventDefault();if(!db)return showAdminError('Configure o Supabase primeiro.');const submit=$('loginSubmit');submit.disabled=true;showAdminError('');try{await query(db.auth.signInWithPassword({email:$('email').value,password:$('password').value}));await checkAdmin();if(admin){closeAdminModal();}else{await db.auth.signOut();showAdminError('Esta conta não possui permissão de administração.');}}catch(err){showAdminError('Não foi possível entrar: '+err.message)}finally{submit.disabled=false}};$('deleteMeetingClose').onclick=closeDeleteMeeting;$('deleteMeetingCancel').onclick=closeDeleteMeeting;document.querySelectorAll('[data-cancel-delete]').forEach(el=>el.onclick=closeDeleteMeeting);$('deleteMeetingConfirm').onclick=deleteSelectedMeeting;document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('deleteMeetingModal').hidden)closeDeleteMeeting();else if(!$('authPanel').hidden)closeAdminModal()}});
+async function initial(){const logo=$('logo');logo.onerror=()=>{logo.hidden=true};$('brandHome').onclick=()=>{switchTab('encontros');showMeetingScreen('home');window.scrollTo({top:0,behavior:'smooth'})};$('setup').hidden=configured;document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));$('loginToggle').onclick=()=>openAdminModal();$('authClose').onclick=closeAdminModal;$('authCancel').onclick=closeAdminModal;document.querySelectorAll('[data-close-admin]').forEach(el=>el.onclick=closeAdminModal);$('logout').onclick=async()=>{if(!db)return;try{await query(db.auth.signOut());admin=false;birthdays=[];await loadDiscussion();closeAdminModal();await load();}catch(err){showAdminError('Não foi possível sair: '+err.message)}};$('loginForm').onsubmit=async e=>{e.preventDefault();if(!db)return showAdminError('Configure o Supabase primeiro.');const submit=$('loginSubmit');submit.disabled=true;showAdminError('');try{await query(db.auth.signInWithPassword({email:$('email').value,password:$('password').value}));await checkAdmin();if(admin){await load();closeAdminModal();}else{await db.auth.signOut();birthdays=[];await load();showAdminError('Esta conta não possui permissão de administração.');}}catch(err){showAdminError('Não foi possível entrar: '+err.message)}finally{submit.disabled=false}};$('deleteMeetingClose').onclick=closeDeleteMeeting;$('deleteMeetingCancel').onclick=closeDeleteMeeting;document.querySelectorAll('[data-cancel-delete]').forEach(el=>el.onclick=closeDeleteMeeting);$('deleteMeetingConfirm').onclick=deleteSelectedMeeting;document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('deleteMeetingModal').hidden)closeDeleteMeeting();else if(!$('authPanel').hidden)closeAdminModal()}});
 $('searchCoverInEditor').onclick=()=>{const p=participants.find(x=>x.id===$('participantId').value);const b=bookForParticipant(p);if(b)openCoverSearch(b.id)};
  $('closeCoverManager').onclick=()=>{$('coverManager').hidden=true;coverBookId=null};
  $('cancelCover').onclick=()=>{coverBookId=null;$('coverEditor').hidden=true;$('coverManager').hidden=true};
@@ -825,9 +844,18 @@ $('meetingForm').onsubmit=async e=>{e.preventDefault();try{let old=meetings.find
  const host=$('meetingHost').value.trim(), co_host=$('meetingCoHost').value.trim()||null;
  const hostPerson=participants.find(p=>p.name===host), coHostPerson=participants.find(p=>p.name===co_host);
  const row={title:book?.title||'Livro a definir',book_id:book?.id||null,starts_at:$('meetingDate').value?new Date($('meetingDate').value).toISOString():null,place:$('meetingPlace').value.trim(),host,co_host,host_participant_id:hostPerson?.id||null,co_host_participant_id:coHostPerson?.id||null,card_url};if(row.host&&row.co_host&&row.host===row.co_host)throw Error('Escolha duas integrantes diferentes para anfitriãs.');if(old)await query(db.from('meetings').update(row).eq('id',old.id));else await query(db.from('meetings').insert(row));$('meetingFormPanel').hidden=true;showMeetingScreen('home');await load();notify('Encontro salvo!')}catch(err){notify(err.message,true)}};
-$('participantForm').onsubmit=async e=>{e.preventDefault();if(!admin)return;const btn=$('saveParticipant');btn.disabled=true;try{const id=$('participantId').value;const name=$('participantName').value.trim(),title=$('participantBook').value.trim(),author=$('participantAuthor').value.trim();if(!name)throw Error('Preencha o nome da integrante.');if(author&&!title)throw Error('Informe o título do livro ou deixe também a autoria em branco.');const readByClub=$('participantRead').checked;const old=participants.find(p=>p.id===id);const oldBook=bookForParticipant(old);let bookId=oldBook?.id||null;let createdBookId=null;
+$('participantForm').onsubmit=async e=>{e.preventDefault();if(!admin)return;const btn=$('saveParticipant');btn.disabled=true;try{const id=$('participantId').value;const name=$('participantName').value.trim(),title=$('participantBook').value.trim(),author=$('participantAuthor').value.trim();if(!name)throw Error('Preencha o nome da integrante.');if(author&&!title)throw Error('Informe o título do livro ou deixe também a autoria em branco.');const readByClub=$('participantRead').checked;
+ const birthdayDay=$('participantBirthdayDay').value.trim(),birthdayMonth=$('participantBirthdayMonth').value.trim();
+ if(Boolean(birthdayDay)!==Boolean(birthdayMonth))throw Error('Preencha o dia e o mês do aniversário ou deixe ambos vazios.');
+ const hasBirthday=!!birthdayDay&&!!birthdayMonth;
+ if(hasBirthday){const d=Number(birthdayDay),m=Number(birthdayMonth);const maxDay=new Date(Date.UTC(2024,m,0)).getUTCDate();if(!Number.isInteger(d)||!Number.isInteger(m)||m<1||m>12||d<1||d>maxDay)throw Error('Informe uma data de aniversário válida.');}
+ if($('participantBirthdayPublic').checked&&!hasBirthday)throw Error('Informe a data antes de autorizar a exibição do aniversário.');
+ const old=participants.find(p=>p.id===id);const oldBook=bookForParticipant(old);let bookId=oldBook?.id||null;let createdBookId=null;
 if(!title){bookId=null;}else if(!oldBook||oldBook.title!==title||oldBook.author!==author){const existing=books.find(b=>b.title.toLocaleLowerCase('pt-BR')===title.toLocaleLowerCase('pt-BR')&&b.author.toLocaleLowerCase('pt-BR')===author.toLocaleLowerCase('pt-BR'));if(existing){bookId=existing.id;}else{const result=await query(db.from('books').insert({title,author}).select('id').single());bookId=result.id;createdBookId=bookId;}}
-try{if(old){await query(db.from('participants').update({name,suggested_book_id:bookId}).eq('id',id))}else{await query(db.from('participants').insert({name,suggested_book_id:bookId}))}}catch(err){if(createdBookId)await db.from('books').delete().eq('id',createdBookId);throw err;}
+let savedParticipantId=id;
+ try{if(old){await query(db.from('participants').update({name,suggested_book_id:bookId}).eq('id',id))}else{const inserted=await query(db.from('participants').insert({name,suggested_book_id:bookId}).select('id').single());savedParticipantId=inserted.id;}}catch(err){if(createdBookId)await db.from('books').delete().eq('id',createdBookId);throw err;}
+ if(hasBirthday){await query(db.from('participant_birthdays').upsert({participant_id:savedParticipantId,birth_day:Number(birthdayDay),birth_month:Number(birthdayMonth),show_public:$('participantBirthdayPublic').checked},{onConflict:'participant_id'}));}
+ else if(old&&birthdayForParticipant(id)){await query(db.from('participant_birthdays').delete().eq('participant_id',id));}
 if(bookId&&oldBook?.id===bookId){await query(db.from('books').update({read_by_club:readByClub}).eq('id',bookId));}
 if(old&&bookId){await syncPendingBookForAcceptedDraw(old.id,bookId);}
 $('participantForm').reset();$('participantId').value='';$('participantEditor').hidden=true;await load();notify('Cadastro da integrante salvo!');}catch(err){notify(err.message,true)}finally{btn.disabled=false}};
@@ -867,6 +895,11 @@ document.body.addEventListener('click',async e=>{
   await saveAttendance(pid,{[field]:!old?.[field]});
  }catch(err){notify(err.message,true);await load()}
  finally{attendanceSaving=false;renderAttendanceRows()}
+});
+document.body.addEventListener('click',e=>{
+ const btn=e.target.closest('[data-birthday-change]');if(!btn)return;
+ birthdayViewMonth=((birthdayViewMonth-1+Number(btn.dataset.birthdayChange)+12)%12)+1;
+ renderBirthdayMonth();
 });
 document.body.addEventListener('click',e=>{const button=e.target.closest('[data-share-meeting]');if(button&&admin)shareMeeting(button.dataset.shareMeeting)});
 document.body.addEventListener('change',e=>{const el=e.target.closest('[data-discussion-publish]');if(el&&admin)updateDiscussionPublication(el.dataset.discussionPublish,el.checked)});

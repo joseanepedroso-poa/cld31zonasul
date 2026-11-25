@@ -501,3 +501,35 @@ body:not(.is-admin) .admin-invite-only{display:none!important}
 .meeting-collapse[data-meeting-section="discussion"] .meeting-collapse-icon{background:#f6ebf0;color:#8b5672;border-color:#e4c8d5}
 .meeting-collapse[data-meeting-section="photos"] .meeting-collapse-icon{background:#faf6f8;color:#91687b;border-color:#eadce3}
 @media(max-width:650px){.meeting-collapse-title{gap:10px}.meeting-collapse-icon{width:30px;height:30px;flex-basis:30px}.meeting-collapse-icon svg{width:16px;height:16px}}
+
+
+/* v3.1.6: compartilhar ao lado do título do próximo livro, somente Admin */
+.meeting-card .meeting-title-share{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:4px 0 9px}
+.meeting-card .meeting-title-share h3{margin:0;min-width:0;flex:1}
+.meeting-card .meeting-title-share .invite-button{flex:0 0 38px;width:38px!important;height:38px;min-width:38px;min-height:38px;max-width:38px;padding:0!important;margin:0;display:grid;place-items:center;background:#f3faf5;border:1px solid #d5e8da;border-radius:9px;color:#16844b;box-shadow:none}
+.meeting-card .meeting-title-share .invite-button:hover,.meeting-card .meeting-title-share .invite-button:focus-visible{background:#e6f4ea;border-color:#a8d0b4}
+.meeting-card .meeting-title-share .whatsapp-mark{width:21px;height:21px}
+
+/* v3.2 — aniversariantes do mês */
+.birthday-month{background:linear-gradient(140deg,#fcf5f7 0%,#fffafc 100%);border:1px solid #ead9e1;border-radius:18px;padding:16px 18px;margin:0 0 18px;box-shadow:0 5px 18px #7e44580b}
+.birthday-header{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.birthday-header .eyebrow{font-size:.7rem;letter-spacing:.09em;color:#9a7180}
+.birthday-header h3{font-family:'Playfair Display',serif;margin:4px 0 0;color:#704b5d;font-weight:600;font-size:1.22rem;display:flex;gap:9px;align-items:center}
+.birthday-heading-icon{width:22px;height:22px;color:#ab7890;flex-shrink:0}
+.birthday-month-nav{display:flex;gap:6px;flex-shrink:0}
+.birthday-month-nav button{min-width:33px;width:33px;height:33px;padding:0;border:1px solid #e1c8d3;border-radius:50%;background:#fff;color:#835970;font-size:1.4rem;line-height:1;display:grid;place-items:center}
+.birthday-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px;margin-top:15px}
+.birthday-person{display:flex;align-items:center;gap:10px;background:#fff;border:1px solid #f0e2e8;border-radius:12px;padding:9px;min-width:0}
+.birthday-person .member-avatar,.birthday-person .member-avatar-button{width:45px!important;height:45px!important;min-width:45px!important;min-height:45px!important;flex:0 0 45px!important;border-width:2px!important}
+.birthday-person .member-avatar img,.birthday-person .member-avatar-button img{object-fit:cover;object-position:center}
+.birthday-person>div:last-child{display:grid;gap:3px;min-width:0}
+.birthday-person strong{font-size:.88rem;color:#5d394b}
+.birthday-person span:not(.member-initials){font-size:.79rem;color:#966d80}
+.birthday-empty{font-size:.88rem;margin:13px 0 0}
+.birthday-editor{border:1px solid #ead8e1;background:#fdf8fa;border-radius:13px;padding:13px 15px;margin:10px 0}
+.birthday-editor legend{font-weight:700;color:#775066;padding:0 5px}
+.birthday-date-fields{margin:8px 0 12px}
+.birthday-consent{display:flex!important;align-items:center;gap:9px;font-size:.87rem;font-weight:600;color:#734e61}
+.birthday-consent input{width:17px;height:17px;flex:0 0 auto}
+.birthday-editor .muted{font-size:.77rem;margin:9px 0 0}
+@media(max-width:650px){.birthday-month{padding:14px}.birthday-header h3{font-size:1.09rem}.birthday-list{grid-template-columns:1fr}.birthday-person{padding:8px}}
