@@ -449,3 +449,42 @@ body.admin-modal-open{overflow:hidden}
 .meeting-collapse-content>.panel{margin:0;border:0;box-shadow:none;padding:8px 8px 12px}
 .meeting-collapse-content .meeting-gallery{margin-top:0}
 @media(max-width:650px){.meeting-collapse>summary{padding:14px 15px;font-size:1.03rem}.meeting-collapse-content{padding:0 8px 8px}.meeting-collapse-content>.panel{padding:8px 6px 12px}}
+
+
+/* v3.1.3 — destaque delicado para Nossa conversa literária */
+.discussion-panel{
+  background:linear-gradient(145deg,#fbf4f6 0%,#f7edf1 62%,#fcf8f9 100%);
+  border:1px solid #e6ccd7;
+  border-left:4px solid #a87b8f;
+  box-shadow:0 8px 22px rgba(99,53,75,.045);
+}
+.discussion-panel .eyebrow{color:#936277;letter-spacing:.17em}
+.discussion-panel h3{color:#613b50}
+.discussion-panel .discussion-form{border-top-color:#dfc4d0}
+.discussion-panel .discussion-form textarea{background:#fffdfd}
+/* A seção recolhível recebe o mesmo tratamento suave, inclusive fechada. */
+.meeting-collapse[data-meeting-section="discussion"]{
+  border:1px solid #dfc0cd;
+  background:linear-gradient(135deg,#faf1f4,#f8edf1);
+  box-shadow:0 5px 16px rgba(92,51,69,.05);
+}
+.meeting-collapse[data-meeting-section="discussion"]>summary{
+  color:#74465d;
+  background:transparent;
+  border-left:4px solid #a87b8f;
+  padding-left:16px;
+}
+.meeting-collapse[data-meeting-section="discussion"]>summary:hover,
+.meeting-collapse[data-meeting-section="discussion"]>summary:focus-visible{
+  background:#f3e5eb;
+}
+.meeting-collapse[data-meeting-section="discussion"] .meeting-collapse-content{background:transparent}
+.meeting-collapse[data-meeting-section="discussion"] .meeting-collapse-content>.discussion-panel{
+  background:transparent;
+  border:0;
+  border-radius:0;
+  box-shadow:none;
+}
+@media(max-width:650px){
+  .meeting-collapse[data-meeting-section="discussion"]>summary{padding-left:11px}
+}
