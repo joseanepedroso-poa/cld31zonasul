@@ -382,9 +382,18 @@ function meetingSectionState(meetingId){
  });
  return state;
 }
+function meetingSectionIcon(key){
+ const icons={
+  confirmed:`<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 11.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Zm8 1.3a2.7 2.7 0 1 0 0-5.4 2.7 2.7 0 0 0 0 5.4ZM2.8 18.7c.6-2.6 2.7-4.1 5.2-4.1s4.6 1.5 5.2 4.1M12.9 18.7c.4-1.9 2-3.1 4-3.1 1.8 0 3.3.9 4.1 3.1" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  discussion:`<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 17.5V6.8c0-1 .8-1.8 1.8-1.8h10.4c1 0 1.8.8 1.8 1.8v7.4c0 1-.8 1.8-1.8 1.8H10l-3.6 2.7c-.5.3-1.4 0-1.4-.7Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.6 9.2h6.8M8.6 12.2h4.7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>`,
+  photos:`<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4.7 7.2h3l1.1-1.7h6.4l1.1 1.7h3c1 0 1.8.8 1.8 1.8v8.5c0 1-.8 1.8-1.8 1.8H4.7c-1 0-1.8-.8-1.8-1.8V9c0-1 .8-1.8 1.8-1.8Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="12" cy="13.2" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>`
+ };
+ return icons[key]||'';
+}
 function meetingAccordion(meetingId,key,title,content,expanded){
  const open=expanded?' open':'';
- return `<details class="meeting-collapse" data-meeting-id="${safe(meetingId)}" data-meeting-section="${safe(key)}"${open}><summary><span>${safe(title)}</span><span class="meeting-collapse-chevron" aria-hidden="true"></span></summary><div class="meeting-collapse-content">${content}</div></details>`;
+ const icon=meetingSectionIcon(key);
+ return `<details class="meeting-collapse" data-meeting-id="${safe(meetingId)}" data-meeting-section="${safe(key)}"${open}><summary><span class="meeting-collapse-title"><span class="meeting-collapse-icon" aria-hidden="true">${icon}</span><span>${safe(title)}</span></span><span class="meeting-collapse-chevron" aria-hidden="true"></span></summary><div class="meeting-collapse-content">${content}</div></details>`;
 }
 function renderDetail(id){
  const m=meetings.find(x=>x.id===id);if(!m)return;
