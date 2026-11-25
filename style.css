@@ -412,3 +412,25 @@ body.admin-modal-open{overflow:hidden}
 .meeting-action-buttons{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .meeting-action-buttons button{font-size:.83rem;padding:8px 11px}
 @media(max-width:650px){.admin-modal-card{padding:19px}.admin-modal-heading h2{font-size:1.25rem}}
+
+/* v3.1 — convites, enquadramento uniforme e perguntas de discussão */
+.invite-button{display:inline-flex;align-items:center;justify-content:center;gap:8px;background:#f5e9ee;color:#794a61;border:1px solid #e4cbd5;padding:10px 13px;border-radius:11px;font-size:.85rem;font-weight:700;max-width:100%;margin:8px 0 0}
+.meeting-card .invite-button{width:100%;margin-top:10px}
+.attendance-avatar{position:relative;border-radius:50%;overflow:hidden;padding:0!important;line-height:0;background:#f5e7ed}
+.attendance-avatar>img{display:block!important;position:absolute;inset:0;width:100%!important;height:100%!important;min-width:100%;min-height:100%;max-width:none!important;max-height:none!important;object-fit:cover!important;object-position:50% 50%!important;border-radius:50%;padding:0!important;margin:0!important}
+.attendance-avatar>img[hidden]{display:none!important}
+.attendance-avatar-initials{line-height:1;display:grid;place-items:center;width:100%;height:100%}
+.attendance-avatar-initials[hidden]{display:none!important}
+.discussion-panel h3{margin:4px 0 5px;font:600 1.4rem 'Playfair Display',Georgia,serif}
+.discussion-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.discussion-visibility{background:#f5e8ee;color:#794b63;border-radius:40px;padding:5px 10px;font-size:.73rem;font-weight:700}
+.discussion-switch{display:flex;align-items:center;gap:9px;padding:11px 0;font-weight:600;font-size:.88rem}
+.discussion-switch input{width:auto;min-width:18px;height:18px;accent-color:#986378}
+.discussion-list{padding-left:25px;margin:15px 0;display:grid;gap:13px}
+.discussion-list li{padding-left:4px;overflow-wrap:anywhere}
+.discussion-item-actions{display:flex;gap:6px;margin-top:7px}
+.discussion-item-actions button{font-size:.75rem;padding:5px 9px}
+.discussion-form{margin-top:18px;border-top:1px solid #eadce1;padding-top:15px;display:grid;gap:10px}
+.discussion-form textarea{font:inherit;color:var(--dark);border:1px solid #d9cbd0;border-radius:11px;padding:11px;width:100%;resize:vertical}
+.discussion-form button{justify-self:start}
+@media(max-width:650px){.discussion-panel{padding:16px}.discussion-heading{gap:8px}}

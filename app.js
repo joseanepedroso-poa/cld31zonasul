@@ -4,6 +4,7 @@ const configured=!!(cfg.supabaseUrl&&cfg.supabasePublishableKey&&window.supabase
 const db=configured?window.supabase.createClient(cfg.supabaseUrl,cfg.supabasePublishableKey):null;
 let admin=false,participants=[],books=[],meetings=[],attendance=[],draws=[],meetingPhotos=[],currentMeeting=null,rolling=false;
 let uploadingMeetingPhotos=false;
+let discussionQuestions=[],discussionSettings=[],discussionAvailable=true,discussionBusy=false;
 let coverBookId=null,coverBusy=false,coverOptions=[];
 let attendanceMode='checkin', attendanceSearch='', attendanceOnlyConfirmed=false, attendanceSaving=false;
 let photoTargetId=null,photoSaving=false;
@@ -13,7 +14,74 @@ const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'
 const fmt=x=>x?new Date(x).toLocaleString('pt-BR',{dateStyle:'medium',timeStyle:'short'}):'Data a definir';
 function notify(s,error=false){const el=$('message');el.textContent=s;el.className='notice'+(error?' error':'');el.hidden=false;window.scrollTo({top:0,behavior:'smooth'});}
 async function query(p){const {data,error}=await p;if(error)throw error;return data}
-async function load(){if(!db)return;try{[participants,books,meetings,attendance,draws,meetingPhotos]=await Promise.all([query(db.from('participants').select('*').order('name')),query(db.from('books').select('*').order('title')),query(db.from('meetings').select('*').order('starts_at',{ascending:false})),query(db.from('attendance').select('*')),query(db.from('draws').select('*').order('created_at')),query(db.from('meeting_photos').select('*').order('created_at',{ascending:true}))]);render();}catch(e){notify('Não foi possível carregar os dados: '+e.message,true)}}
+async function load(){if(!db)return;try{[participants,books,meetings,attendance,draws,meetingPhotos]=await Promise.all([query(db.from('participants').select('*').order('name')),query(db.from('books').select('*').order('title')),query(db.from('meetings').select('*').order('starts_at',{ascending:false})),query(db.from('attendance').select('*')),query(db.from('draws').select('*').order('created_at')),query(db.from('meeting_photos').select('*').order('created_at',{ascending:true}))]);await loadDiscussion();render();}catch(e){notify('Não foi possível carregar os dados: '+e.message,true)}}
+// Compartilha apenas as informações já públicas do encontro, sem envio automático.
+function meetingInviteText(m){
+ const date=m.starts_at?new Date(m.starts_at).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'A definir';
+ return `Gurias, nosso próximo encontro do Clube de Leitura d’Elas — Grupo 31 Zona Sul! 📚\n\n📖 Livro: ${meetingTitle(m)}${meetingBook(m)?.author?' — '+meetingBook(m).author:''}\n📅 Data e horário: ${date}\n📍 Local: ${m.place||'A definir'}\n👭 Anfitriãs: ${hostsLabel(m)}\n\nMais informações no site do clube:\nhttps://joseanepedroso-poa.github.io/cld31zonasul/`;
+}
+async function shareMeeting(id){
+ const m=meetings.find(x=>x.id===id);if(!m)return;
+ const text=meetingInviteText(m);
+ // Abre a conversa do WhatsApp para revisão e envio pela própria participante.
+ window.open('https://wa.me/?text='+encodeURIComponent(text),'_blank','noopener,noreferrer');
+}
+async function loadDiscussion(){
+ if(!db)return;
+ try{
+  [discussionQuestions,discussionSettings]=await Promise.all([
+   query(db.from('meeting_discussion_questions').select('*').order('sort_order',{ascending:true}).order('created_at',{ascending:true})),
+   query(db.from('meeting_discussion_settings').select('*'))
+  ]);
+  discussionAvailable=true;
+ }catch(e){
+  discussionQuestions=[];discussionSettings=[];discussionAvailable=false;
+  console.warn('Seção de perguntas ainda não configurada. Execute migration_v31.sql:',e);
+ }
+}
+function discussionMarkup(m){
+ if(!discussionAvailable)return admin?'<div class="panel discussion-panel"><h3>Para conversar sobre o livro</h3><p class="muted">Execute migration_v31.sql no Supabase para habilitar as perguntas.</p></div>':'';
+ const published=discussionSettings.some(x=>x.meeting_id===m.id&&x.published);
+ if(!admin&&!published)return '';
+ const questions=discussionQuestions.filter(q=>q.meeting_id===m.id);
+ if(!admin&&!questions.length)return '';
+ return `<section class="panel discussion-panel" aria-label="Perguntas para discussão"><div class="discussion-heading"><div><div class="eyebrow">NOSSA CONVERSA LITERÁRIA</div><h3>Para conversar sobre o livro</h3></div>${admin?`<span class="discussion-visibility">${published?'Visível para o grupo':'Rascunho privado'}</span>`:''}</div>
+  ${admin?`<label class="discussion-switch"><input type="checkbox" data-discussion-publish="${safe(m.id)}" ${published?'checked':''} ${discussionBusy?'disabled':''}><span>Mostrar perguntas para o grupo</span></label>`:''}
+  ${questions.length?`<ol class="discussion-list">${questions.map(q=>`<li><span>${safe(q.question_text)}</span>${admin?`<span class="discussion-item-actions"><button class="outline" type="button" data-discussion-edit="${safe(q.id)}">Editar</button><button class="quiet" type="button" data-discussion-delete="${safe(q.id)}">Excluir</button></span>`:''}</li>`).join('')}</ol>`:'<p class="muted">Nenhuma pergunta cadastrada ainda.</p>'}
+  ${admin?`<form class="discussion-form" data-discussion-form="${safe(m.id)}"><label>Nova pergunta ou provocação literária<textarea name="question" rows="2" maxlength="600" placeholder="Que tema ou personagem você gostaria de discutir?" required></textarea></label><button type="submit" class="outline" ${discussionBusy?'disabled':''}>+ Adicionar pergunta</button></form>`:''}</section>`;
+}
+async function updateDiscussionPublication(meetingId,published){
+ if(!admin||discussionBusy)return;
+ discussionBusy=true;
+ try{
+  await query(db.from('meeting_discussion_settings').upsert({meeting_id:meetingId,published},{onConflict:'meeting_id'}));
+  await loadDiscussion();renderDetail(meetingId);
+ }catch(e){notify('Erro ao alterar a publicação: '+e.message,true);renderDetail(meetingId)}finally{discussionBusy=false;}
+}
+async function addDiscussionQuestion(meetingId,text){
+ if(!admin||discussionBusy||!text.trim())return;
+ discussionBusy=true;
+ try{
+  const order=discussionQuestions.filter(q=>q.meeting_id===meetingId).reduce((max,q)=>Math.max(max,q.sort_order||0),0)+1;
+  await query(db.from('meeting_discussion_questions').insert({meeting_id:meetingId,question_text:text.trim(),sort_order:order}));
+  await loadDiscussion();renderDetail(meetingId);
+ }catch(e){notify('Não foi possível salvar a pergunta: '+e.message,true)}finally{discussionBusy=false;}
+}
+async function editDiscussionQuestion(id){
+ if(!admin||discussionBusy)return;
+ const q=discussionQuestions.find(x=>x.id===id);if(!q)return;
+ const text=prompt('Editar pergunta para discussão:',q.question_text);
+ if(text===null)return;
+ if(!text.trim()||text.length>600)return alert('A pergunta precisa ter entre 1 e 600 caracteres.');
+ discussionBusy=true;
+ try{await query(db.from('meeting_discussion_questions').update({question_text:text.trim()}).eq('id',id));await loadDiscussion();renderDetail(q.meeting_id)}catch(e){notify(e.message,true)}finally{discussionBusy=false}
+}
+async function deleteDiscussionQuestion(id){
+ if(!admin||discussionBusy)return;
+ const q=discussionQuestions.find(x=>x.id===id);if(!q||!confirm('Excluir esta pergunta de discussão?'))return;
+ discussionBusy=true;
+ try{await query(db.from('meeting_discussion_questions').delete().eq('id',id));await loadDiscussion();renderDetail(q.meeting_id)}catch(e){notify(e.message,true)}finally{discussionBusy=false}
+}
 function switchTab(t){document.querySelectorAll('.tab').forEach(el=>el.hidden=el.id!==`tab-${t}`);document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));if(t==='encontros'&&meetingScreen!=='home'){showMeetingScreen('home');}}
 function showMeetingScreen(screen,back=null){
  if(back)meetingReturnScreen=back;
@@ -118,7 +186,7 @@ function celebrateDraw(){
 }
 function hostsLabel(m){const h=participants.find(p=>p.id===m.host_participant_id)?.name||m.host||'A definir';const co=participants.find(p=>p.id===m.co_host_participant_id)?.name||m.co_host;return co?`${h} e ${co}`:h}
 function hostsDetail(m){const h=participants.find(p=>p.id===m.host_participant_id)?.name||m.host||'A definir';const co=participants.find(p=>p.id===m.co_host_participant_id)?.name||m.co_host;return `<p><strong>Anfitriã sorteada:</strong> ${safe(h)}</p>${co?`<p><strong>Anfitriã convidada:</strong> ${safe(co)}</p>`:''}`}
-function meetingCard(m,featured=false){const count=attendance.filter(a=>a.meeting_id===m.id&&a.confirmed).length;return `<article class="meeting-card ${featured?'featured':''}">${m.card_url?`<img src="${safe(m.card_url)}" alt="Card de divulgação do encontro" loading="lazy">`:'<div class="placeholder">Card do encontro em breve</div>'}<div class="content"><div class="eyebrow">${featured?'PRÓXIMA LEITURA':'ENCONTRO'}</div><h3>${safe(meetingTitle(m))}</h3><div class="meta">${safe(fmt(m.starts_at))}<br>Anfitriãs: ${safe(hostsLabel(m))}<br>${safe(m.place||'Local a definir')}</div>${featured&&(!m.starts_at||!m.place||!m.card_url)?'<div class="soon">Em breve, mais informações sobre o encontro.</div>':''}<button class="outline" data-open="${safe(m.id)}">Ver detalhes (${count} confirmada${count===1?'':'s'})</button></div></article>`}
+function meetingCard(m,featured=false){const count=attendance.filter(a=>a.meeting_id===m.id&&a.confirmed).length;return `<article class="meeting-card ${featured?'featured':''}">${m.card_url?`<img src="${safe(m.card_url)}" alt="Card de divulgação do encontro" loading="lazy">`:'<div class="placeholder">Card do encontro em breve</div>'}<div class="content"><div class="eyebrow">${featured?'PRÓXIMA LEITURA':'ENCONTRO'}</div><h3>${safe(meetingTitle(m))}</h3><div class="meta">${safe(fmt(m.starts_at))}<br>Anfitriãs: ${safe(hostsLabel(m))}<br>${safe(m.place||'Local a definir')}</div>${featured&&(!m.starts_at||!m.place||!m.card_url)?'<div class="soon">Em breve, mais informações sobre o encontro.</div>':''}<button class="outline" data-open="${safe(m.id)}">Ver detalhes (${count} confirmada${count===1?'':'s'})</button>${featured?`<button type="button" class="invite-button" data-share-meeting="${safe(m.id)}">Compartilhar convite no WhatsApp</button>`:''}</div></article>`}
 function renderMeetings(){
  const selectedMeeting=$('drawMeeting').value;
  const future=meetings.filter(isUpcoming).sort((a,b)=>new Date(a.starts_at)-new Date(b.starts_at));
@@ -305,7 +373,7 @@ function openGalleryPhoto(id){
  $('galleryClose').focus({preventScroll:true});
 }
 function closeGalleryPhoto(){const modal=$('galleryModal');if(modal.hidden)return;modal.hidden=true;$('galleryFullImage').removeAttribute('src');document.body.classList.remove('gallery-modal-open');}
-function renderDetail(id){const m=meetings.find(x=>x.id===id);if(!m)return;currentMeeting=id;const a=attendance.filter(x=>x.meeting_id===id);const historical=isPastMeeting(m);let detail=`<div class="panel"><div class="meeting-info"><div>${m.card_url?`<img class="meeting-banner" src="${safe(m.card_url)}" alt="Card do encontro">`:'<div class="placeholder">Encontro do Clube</div>'}</div><div><div class="eyebrow">NOSSO ENCONTRO</div><h2>${safe(meetingTitle(m))}</h2><p>${safe(fmt(m.starts_at))}</p><p><strong>Local:</strong> ${safe(m.place||'A definir')}</p>${hostsDetail(m)}<p><strong>Confirmadas:</strong> ${a.filter(x=>x.confirmed).length} · <strong>Presentes:</strong> ${a.filter(x=>x.checked_in).length}</p>${admin?`<details class="meeting-action-menu"><summary aria-label="Opções de administração do encontro">⋯ Opções</summary><div class="meeting-action-buttons"><button type="button" class="outline" data-edit-meeting="${safe(id)}">Editar encontro</button><button type="button" class="danger" data-delete-meeting="${safe(id)}">Excluir encontro</button></div></details>`:''}</div></div></div>`;
+function renderDetail(id){const m=meetings.find(x=>x.id===id);if(!m)return;currentMeeting=id;const a=attendance.filter(x=>x.meeting_id===id);const historical=isPastMeeting(m);let detail=`<div class="panel"><div class="meeting-info"><div>${m.card_url?`<img class="meeting-banner" src="${safe(m.card_url)}" alt="Card do encontro">`:'<div class="placeholder">Encontro do Clube</div>'}</div><div><div class="eyebrow">NOSSO ENCONTRO</div><h2>${safe(meetingTitle(m))}</h2><p>${safe(fmt(m.starts_at))}</p><p><strong>Local:</strong> ${safe(m.place||'A definir')}</p>${hostsDetail(m)}${!historical?`<button type="button" class="invite-button" data-share-meeting="${safe(id)}">Compartilhar convite no WhatsApp</button>`:''}<p><strong>Confirmadas:</strong> ${a.filter(x=>x.confirmed).length} · <strong>Presentes:</strong> ${a.filter(x=>x.checked_in).length}</p>${admin?`<details class="meeting-action-menu"><summary aria-label="Opções de administração do encontro">⋯ Opções</summary><div class="meeting-action-buttons"><button type="button" class="outline" data-edit-meeting="${safe(id)}">Editar encontro</button><button type="button" class="danger" data-delete-meeting="${safe(id)}">Excluir encontro</button></div></details>`:''}</div></div></div>`;
 if(historical)detail+=galleryMarkup(id);
 if(admin&&isPastMeeting(m)){
  detail+=`<div class="panel archive-presence"><div class="eyebrow">ENCONTRO ANTERIOR</div><h3>Registro histórico</h3><p class="muted">O check-in está encerrado. Não é necessário cadastrar presenças dos encontros anteriores.</p></div>`;
@@ -325,7 +393,7 @@ if(admin&&isPastMeeting(m)){
 }else{const confirmedPeople=a.filter(x=>x.confirmed).map(x=>participants.find(p=>p.id===x.participant_id)).filter(Boolean);
  const empty=isPastMeeting(m)?'<p class="muted">0 participantes</p>':'<p class="muted">Ainda sem confirmações.</p>';
  detail+=`<div class="panel"><h3>Confirmadas (${confirmedPeople.length})</h3><div class="rows confirmed-people">${confirmedPeople.map(p=>`<div class="public-confirmed">${participantAvatar(p)}<strong>${safe(p.name)}</strong></div>`).join('')||empty}</div></div>`;}
-if(!historical)detail+=galleryMarkup(id);$('meetingDetail').innerHTML=detail;$('meetingDetail').hidden=false;if(admin)renderAttendanceRows();}
+if(!historical)detail+=galleryMarkup(id);detail+=discussionMarkup(m);$('meetingDetail').innerHTML=detail;$('meetingDetail').hidden=false;if(admin)renderAttendanceRows();}
 function renderAttendanceRows(){
  const root=$('attendanceRows');if(!root||!admin||!currentMeeting||isPastMeeting(meetings.find(m=>m.id===currentMeeting)))return;
  const rows=attendance.filter(a=>a.meeting_id===currentMeeting);
@@ -695,7 +763,7 @@ async function deleteSelectedMeeting(){
  }catch(e){$('deleteMeetingError').textContent='Não foi possível excluir: '+e.message;$('deleteMeetingError').hidden=false;}
  finally{deletingMeeting=false;$('deleteMeetingConfirm').disabled=false;}
 }
-async function initial(){const logo=$('logo');logo.onerror=()=>{logo.hidden=true};$('brandHome').onclick=()=>{switchTab('encontros');showMeetingScreen('home');window.scrollTo({top:0,behavior:'smooth'})};$('setup').hidden=configured;document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));$('loginToggle').onclick=()=>openAdminModal();$('authClose').onclick=closeAdminModal;$('authCancel').onclick=closeAdminModal;document.querySelectorAll('[data-close-admin]').forEach(el=>el.onclick=closeAdminModal);$('logout').onclick=async()=>{if(!db)return;try{await query(db.auth.signOut());admin=false;closeAdminModal();render();}catch(err){showAdminError('Não foi possível sair: '+err.message)}};$('loginForm').onsubmit=async e=>{e.preventDefault();if(!db)return showAdminError('Configure o Supabase primeiro.');const submit=$('loginSubmit');submit.disabled=true;showAdminError('');try{await query(db.auth.signInWithPassword({email:$('email').value,password:$('password').value}));await checkAdmin();if(admin){closeAdminModal();}else{await db.auth.signOut();showAdminError('Esta conta não possui permissão de administração.');}}catch(err){showAdminError('Não foi possível entrar: '+err.message)}finally{submit.disabled=false}};$('deleteMeetingClose').onclick=closeDeleteMeeting;$('deleteMeetingCancel').onclick=closeDeleteMeeting;document.querySelectorAll('[data-cancel-delete]').forEach(el=>el.onclick=closeDeleteMeeting);$('deleteMeetingConfirm').onclick=deleteSelectedMeeting;document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('deleteMeetingModal').hidden)closeDeleteMeeting();else if(!$('authPanel').hidden)closeAdminModal()}});
+async function initial(){const logo=$('logo');logo.onerror=()=>{logo.hidden=true};$('brandHome').onclick=()=>{switchTab('encontros');showMeetingScreen('home');window.scrollTo({top:0,behavior:'smooth'})};$('setup').hidden=configured;document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));$('loginToggle').onclick=()=>openAdminModal();$('authClose').onclick=closeAdminModal;$('authCancel').onclick=closeAdminModal;document.querySelectorAll('[data-close-admin]').forEach(el=>el.onclick=closeAdminModal);$('logout').onclick=async()=>{if(!db)return;try{await query(db.auth.signOut());admin=false;await loadDiscussion();closeAdminModal();render();}catch(err){showAdminError('Não foi possível sair: '+err.message)}};$('loginForm').onsubmit=async e=>{e.preventDefault();if(!db)return showAdminError('Configure o Supabase primeiro.');const submit=$('loginSubmit');submit.disabled=true;showAdminError('');try{await query(db.auth.signInWithPassword({email:$('email').value,password:$('password').value}));await checkAdmin();if(admin){closeAdminModal();}else{await db.auth.signOut();showAdminError('Esta conta não possui permissão de administração.');}}catch(err){showAdminError('Não foi possível entrar: '+err.message)}finally{submit.disabled=false}};$('deleteMeetingClose').onclick=closeDeleteMeeting;$('deleteMeetingCancel').onclick=closeDeleteMeeting;document.querySelectorAll('[data-cancel-delete]').forEach(el=>el.onclick=closeDeleteMeeting);$('deleteMeetingConfirm').onclick=deleteSelectedMeeting;document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('deleteMeetingModal').hidden)closeDeleteMeeting();else if(!$('authPanel').hidden)closeAdminModal()}});
 $('searchCoverInEditor').onclick=()=>{const p=participants.find(x=>x.id===$('participantId').value);const b=bookForParticipant(p);if(b)openCoverSearch(b.id)};
  $('closeCoverManager').onclick=()=>{$('coverManager').hidden=true;coverBookId=null};
  $('cancelCover').onclick=()=>{coverBookId=null;$('coverEditor').hidden=true;$('coverManager').hidden=true};
@@ -751,6 +819,10 @@ document.body.addEventListener('click',async e=>{
  }catch(err){notify(err.message,true);await load()}
  finally{attendanceSaving=false;renderAttendanceRows()}
 });
+document.body.addEventListener('click',e=>{const button=e.target.closest('[data-share-meeting]');if(button)shareMeeting(button.dataset.shareMeeting)});
+document.body.addEventListener('change',e=>{const el=e.target.closest('[data-discussion-publish]');if(el&&admin)updateDiscussionPublication(el.dataset.discussionPublish,el.checked)});
+document.body.addEventListener('submit',e=>{const form=e.target.closest('[data-discussion-form]');if(!form)return;e.preventDefault();if(admin)addDiscussionQuestion(form.dataset.discussionForm,form.elements.question.value)});
+document.body.addEventListener('click',e=>{const edit=e.target.closest('[data-discussion-edit]');const del=e.target.closest('[data-discussion-delete]');if(edit&&admin)editDiscussionQuestion(edit.dataset.discussionEdit);else if(del&&admin)deleteDiscussionQuestion(del.dataset.discussionDelete)});
 document.body.addEventListener('click',e=>{const btn=e.target.closest('[data-attendance-bulk]');if(btn&&admin)bulkCheckIn(btn.dataset.attendanceBulk==='mark');});
 document.body.addEventListener('input',e=>{
  if(e.target.id!=='attendanceSearch')return;
@@ -794,7 +866,7 @@ $('drawMeeting').onchange=renderDraws;$('drawBtn').onclick=runDraw;$('acceptBtn'
 };
 $('resetDraws').onclick=async()=>{if(!admin||rolling)return;if(!confirm('Atenção: reiniciar apaga o histórico de sorteios deste encontro, inclusive resultados confirmados. Deseja continuar?'))return;try{await query(db.from('draws').delete().eq('meeting_id',$('drawMeeting').value));await load()}catch(e){notify(e.message,true)}};
 if(db){await checkAdmin();await load()}}
-async function checkAdmin(){const {data}=await db.auth.getUser();const user=data?.user;admin=false;if(user){try{const rows=await query(db.from('admins').select('user_id').eq('user_id',user.id));admin=rows.length>0}catch(e){console.warn(e)}}render()}
+async function checkAdmin(){const {data}=await db.auth.getUser();const user=data?.user;admin=false;if(user){try{const rows=await query(db.from('admins').select('user_id').eq('user_id',user.id));admin=rows.length>0}catch(e){console.warn(e)}}await loadDiscussion();render()}
 // Aguarda todos os elementos do HTML, incluindo os modais no fim da pagina.
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => { initial().catch(err => console.error("Falha ao iniciar o clube:", err)); }, { once: true });
