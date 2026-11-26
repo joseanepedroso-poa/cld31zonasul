@@ -666,3 +666,26 @@ body.activity-projection-open{overflow:hidden}
   #meetingDetail .gallery-upload label{margin-bottom:6px}
   #meetingDetail .gallery-upload .muted{margin:5px 0 8px}
 }
+
+/* v3.3.3 — convite mais claro para explorar o encontro em destaque */
+.meeting-card .featured-details-button{display:flex;align-items:center;justify-content:center;gap:10px;min-height:48px;font-weight:700;letter-spacing:.005em;transition:background-color .2s,color .2s,border-color .2s}
+.meeting-card .featured-details-button .featured-details-arrow{display:inline-block;font-size:1.35rem;font-weight:400;line-height:1;transition:transform .2s ease}
+.meeting-card .featured-details-button:hover:not(:disabled){background:#f8edf2;border-color:#966478}
+.meeting-card .featured-details-button:hover:not(:disabled) .featured-details-arrow{transform:translateX(3px)}
+@media(max-width:650px){.meeting-card .featured-details-button{min-height:46px;font-size:.96rem}}
+
+
+/* v3.3.4 — dados do encontro mais compactos em telas pequenas */
+@media(max-width:650px){
+  .meeting-card .content{padding:12px 14px 14px}
+  .meeting-card .content .eyebrow{font-size:.59rem;letter-spacing:.13em}
+  .meeting-card .meeting-title-share{margin:2px 0 6px;gap:9px}
+  .meeting-card .meeting-title-share h3{font-size:1.22rem;line-height:1.25}
+  .meeting-card .meta{font-size:.83rem;line-height:1.4;margin-bottom:11px}
+  #meetingDetail>.panel:first-child{padding:12px}
+  #meetingDetail .meeting-info{gap:11px}
+  #meetingDetail .meeting-info h2{font-size:1.36rem;line-height:1.23;margin:5px 0 8px}
+  #meetingDetail .meeting-info p{font-size:.88rem;line-height:1.4;margin:5px 0}
+  #meetingDetail .meeting-info .eyebrow{font-size:.6rem}
+  #meetingDetail .meeting-info .meeting-banner{border-radius:10px}
+}
