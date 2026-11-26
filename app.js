@@ -580,7 +580,6 @@ function renderDetail(id){
  currentMeeting=id;
  const a=attendance.filter(x=>x.meeting_id===id);
  const historical=isPastMeeting(m);
- const isFeatured=featuredMeeting()?.id===id;
  const confirmedCount=a.filter(x=>x.confirmed).length;
  const presentCount=a.filter(x=>x.checked_in).length;
  let detail=`<div class="panel"><div class="meeting-info"><div>${m.card_url?`<img class="meeting-banner" src="${safe(m.card_url)}" alt="Card do encontro">`:'<div class="placeholder">Encontro do Clube</div>'}</div><div><div class="eyebrow">NOSSO ENCONTRO</div><h2>${safe(meetingTitle(m))}</h2><p>${safe(fmt(m.starts_at))}</p><p><strong>Local:</strong> ${safe(m.place||'A definir')}</p>${hostsDetail(m)}${!historical&&admin?`<button type="button" class="invite-button admin-invite-only" data-share-meeting="${safe(id)}" aria-label="Compartilhar convite no WhatsApp" title="Compartilhar convite no WhatsApp"><svg class="whatsapp-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 11.7a8 8 0 0 1-11.7 7.1L4 20l1.2-4.3A8 8 0 1 1 20 11.7Z" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linejoin="round"/><path d="M9 8.1c-.3-.6-.5-.6-.8-.6-.3 0-.7.1-1 .5-.4.5-.6 1-.4 1.8.4 1.6 2.2 3.4 3.7 4.2 1.4.7 2.4.8 3 .5.5-.2 1-.8 1.1-1.3 0-.2-.1-.3-.4-.5l-1.6-.8c-.3-.1-.4 0-.6.2l-.6.7c-.2.2-.4.2-.7.1-.7-.3-1.6-1-2.1-1.6-.2-.2-.2-.4 0-.6l.5-.6c.2-.2.2-.4.1-.6Z" fill="currentColor"/></svg><span>WhatsApp</span></button>`:''}<p><strong>Confirmadas:</strong> ${confirmedCount} · <strong>Presentes:</strong> ${presentCount}</p>${admin?`<details class="meeting-action-menu"><summary aria-label="Opções de administração do encontro">⋯ Opções</summary><div class="meeting-action-buttons"><button type="button" class="outline" data-edit-meeting="${safe(id)}">Editar encontro</button><button type="button" class="danger" data-delete-meeting="${safe(id)}">Excluir encontro</button></div></details>`:''}</div></div></div>`;
@@ -605,22 +604,16 @@ function renderDetail(id){
   confirmedSection=`<div class="panel"><h3>Leitoras confirmadas (${confirmedPeople.length})</h3><div class="rows confirmed-people">${confirmedPeople.map(p=>`<div class="public-confirmed">${participantAvatar(p)}<strong>${safe(p.name)}</strong></div>`).join('')||empty}</div></div>`;
  }
  const photos=galleryMarkup(id);
- const discussion=discussionMarkup(m,isFeatured);
+ const discussion=discussionMarkup(m,true);
  const activityContent=activitiesMarkup(m);
- if(isFeatured){
-  // Mostra a seção pública somente quando há perguntas efetivamente publicadas.
-  // Para Admin, mantém o formulário para cadastrar e publicar perguntas.
-  const questionsContent=discussion;
-  const expanded=(key,defaultValue)=>Object.hasOwn(savedSections,key)?savedSections[key]:defaultValue;
-  detail+=meetingAccordion(id,'confirmed',`Leitoras confirmadas (${confirmedCount})`,confirmedSection,expanded('confirmed',true));
-  if(questionsContent)detail+=meetingAccordion(id,'discussion','Nossa conversa literária',questionsContent,expanded('discussion',false));
-  if(activityContent)detail+=meetingAccordion(id,'activities','Nossa Roda Literária',activityContent,expanded('activities',!!clubActivities.some(x=>x.meeting_id===id&&x.status==='live')));
-  detail+=meetingAccordion(id,'photos','Momentos do nosso encontro',photos,expanded('photos',false));
- }else if(historical){
-  detail+=photos+confirmedSection+discussion+(activityContent?meetingAccordion(id,'activities','Nossa Roda Literária',activityContent,false):'');
- }else{
-  detail+=confirmedSection+photos+discussion+(activityContent?meetingAccordion(id,'activities','Nossa Roda Literária',activityContent,false):'');
- }
+ // Ordem única para os detalhes de qualquer encontro, público ou Admin.
+ // A seção de perguntas/atividades é omitida quando não houver conteúdo acessível
+ // à pessoa que está consultando. O Admin conserva os formulários de criação.
+ const expanded=(key,defaultValue)=>Object.hasOwn(savedSections,key)?savedSections[key]:defaultValue;
+ if(discussion)detail+=meetingAccordion(id,'discussion','Nossa conversa literária',discussion,expanded('discussion',true));
+ if(activityContent)detail+=meetingAccordion(id,'activities','Nossa Roda Literária',activityContent,expanded('activities',true));
+ detail+=meetingAccordion(id,'confirmed',`Leitoras confirmadas (${confirmedCount})`,confirmedSection,expanded('confirmed',false));
+ detail+=meetingAccordion(id,'photos','Momentos do nosso encontro',photos,expanded('photos',false));
  $('meetingDetail').innerHTML=detail;
  $('meetingDetail').hidden=false;
  if(admin)renderAttendanceRows();
