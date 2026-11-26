@@ -52,7 +52,7 @@ function discussionMarkup(m, insideAccordion=false){
  if(!admin&&!questions.length)return '';
  return `<section class="panel discussion-panel" aria-label="Perguntas para discussão"><div class="discussion-heading"><div>${insideAccordion?'':'<div class="eyebrow">NOSSA CONVERSA LITERÁRIA</div>'}<h3>Para conversar sobre o livro</h3></div>${admin?`<span class="discussion-visibility">${published?'Visível para o grupo':'Rascunho privado'}</span>`:''}</div>
   ${admin?`<label class="discussion-switch"><input type="checkbox" data-discussion-publish="${safe(m.id)}" ${published?'checked':''} ${discussionBusy?'disabled':''}><span>Mostrar perguntas para o grupo</span></label>`:''}
-  ${questions.length?`<ol class="discussion-list">${questions.map(q=>`<li><span>${safe(q.question_text)}</span>${admin?`<span class="discussion-item-actions"><button class="outline" type="button" data-discussion-edit="${safe(q.id)}">Editar</button><button class="quiet" type="button" data-discussion-delete="${safe(q.id)}">Excluir</button></span>`:''}</li>`).join('')}</ol>`:'<p class="muted">Nenhuma pergunta cadastrada ainda.</p>'}
+  ${questions.length?`<ol class="discussion-list">${questions.map(q=>`<li><span>${safe(q.question_text)}</span>${admin?`<span class="discussion-item-actions"><button class="outline" type="button" data-discussion-edit="${safe(q.id)}">Editar</button><button class="quiet" type="button" data-discussion-delete="${safe(q.id)}">Excluir</button><span class="discussion-order-controls"><button class="outline discussion-move" type="button" data-discussion-move="${safe(q.id)}" data-direction="up" aria-label="Subir pergunta" title="Subir pergunta" ${questions[0].id===q.id?'disabled':''}>↑</button><button class="outline discussion-move" type="button" data-discussion-move="${safe(q.id)}" data-direction="down" aria-label="Descer pergunta" title="Descer pergunta" ${questions[questions.length-1].id===q.id?'disabled':''}>↓</button></span></span>`:''}</li>`).join('')}</ol>`:'<p class="muted">Nenhuma pergunta cadastrada ainda.</p>'}
   ${admin?`<form class="discussion-form" data-discussion-form="${safe(m.id)}"><label>Nova pergunta ou provocação literária<textarea name="question" rows="2" maxlength="600" placeholder="Que tema ou personagem você gostaria de discutir?" required></textarea></label><button type="submit" class="outline" ${discussionBusy?'disabled':''}>+ Adicionar pergunta</button></form>`:''}</section>`;
 }
 async function updateDiscussionPublication(meetingId,published){
@@ -86,6 +86,23 @@ async function deleteDiscussionQuestion(id){
  const q=discussionQuestions.find(x=>x.id===id);if(!q||!confirm('Excluir esta pergunta de discussão?'))return;
  discussionBusy=true;
  try{await query(db.from('meeting_discussion_questions').delete().eq('id',id));await loadDiscussion();discussionBusy=false;renderDetail(q.meeting_id)}catch(e){discussionBusy=false;notify(e.message,true)}finally{discussionBusy=false}
+}
+async function moveDiscussionQuestion(id,direction){
+ if(!admin||discussionBusy)return;
+ const q=discussionQuestions.find(x=>x.id===id);if(!q)return;
+ const ordered=discussionQuestions.filter(x=>x.meeting_id===q.meeting_id);
+ const i=ordered.findIndex(x=>x.id===id), j=i+(direction==='up'?-1:1);
+ if(i<0||j<0||j>=ordered.length)return;
+ // Normaliza posições para evitar empates antigos na ordem do banco.
+ const next=[...ordered];[next[i],next[j]]=[next[j],next[i]];
+ discussionBusy=true;
+ try{
+  for(let k=0;k<next.length;k++){
+   if(next[k].sort_order!==k+1)await query(db.from('meeting_discussion_questions').update({sort_order:k+1}).eq('id',next[k].id));
+  }
+  await loadDiscussion();
+  discussionBusy=false;renderDetail(q.meeting_id);
+ }catch(e){discussionBusy=false;await loadDiscussion();renderDetail(q.meeting_id);notify('Não foi possível reordenar a pergunta: '+e.message,true)}
 }
 function switchTab(t){document.querySelectorAll('.tab').forEach(el=>el.hidden=el.id!==`tab-${t}`);document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===t));if(t==='encontros'&&meetingScreen!=='home'){showMeetingScreen('home');}}
 function showMeetingScreen(screen,back=null){
@@ -1051,7 +1068,7 @@ document.body.addEventListener('click',e=>{
 document.body.addEventListener('click',e=>{const button=e.target.closest('[data-share-meeting]');if(button&&admin)shareMeeting(button.dataset.shareMeeting)});
 document.body.addEventListener('change',e=>{const el=e.target.closest('[data-discussion-publish]');if(el&&admin)updateDiscussionPublication(el.dataset.discussionPublish,el.checked)});
 document.body.addEventListener('submit',e=>{const form=e.target.closest('[data-discussion-form]');if(!form)return;e.preventDefault();if(admin)addDiscussionQuestion(form.dataset.discussionForm,form.elements.question.value)});
-document.body.addEventListener('click',e=>{const edit=e.target.closest('[data-discussion-edit]');const del=e.target.closest('[data-discussion-delete]');if(edit&&admin)editDiscussionQuestion(edit.dataset.discussionEdit);else if(del&&admin)deleteDiscussionQuestion(del.dataset.discussionDelete)});
+document.body.addEventListener('click',e=>{const move=e.target.closest('[data-discussion-move]');const edit=e.target.closest('[data-discussion-edit]');const del=e.target.closest('[data-discussion-delete]');if(move&&admin)moveDiscussionQuestion(move.dataset.discussionMove,move.dataset.direction);else if(edit&&admin)editDiscussionQuestion(edit.dataset.discussionEdit);else if(del&&admin)deleteDiscussionQuestion(del.dataset.discussionDelete)});
 document.body.addEventListener('click',e=>{const btn=e.target.closest('[data-attendance-bulk]');if(btn&&admin)bulkCheckIn(btn.dataset.attendanceBulk==='mark');});
 document.body.addEventListener('input',e=>{
  if(e.target.id!=='attendanceSearch')return;

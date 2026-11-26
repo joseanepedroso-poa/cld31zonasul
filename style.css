@@ -603,3 +603,66 @@ body.activity-projection-open{overflow:hidden}
 .activity-projected .activity-cloud{min-height:45vh}
 .activity-projected .activity-response-count strong{font-size:2.2rem}
 @media(max-width:650px){.live-activity{padding:13px}.activity-question{font-size:1.15rem}.activity-form-actions{display:grid;grid-template-columns:1fr 1fr}.activity-form-actions button{min-width:0;padding:10px 6px;font-size:.82rem}.live-activity.activity-projected{inset:5px;padding:16px}.activity-cloud{gap:8px}}
+
+/* v3.3.1 — Roda Literária compacta no celular e reordenação de perguntas */
+.discussion-order-controls{display:inline-flex;gap:5px;align-items:center;margin-left:5px}
+.discussion-order-controls .discussion-move{min-width:35px;min-height:35px;width:35px;padding:5px;font-size:1.1rem;line-height:1;border-radius:9px}
+.discussion-order-controls .discussion-move:disabled{opacity:.35;cursor:default}
+@media(max-width:650px){
+  .activity-section{padding:0}
+  .activity-cards{gap:10px}
+  .live-activity:not(.activity-projected){padding:12px;border-radius:13px}
+  .live-activity:not(.activity-projected) .activity-question{font-size:1.08rem;line-height:1.3;margin:9px 0 12px}
+  .live-activity:not(.activity-projected) .activity-topline{gap:6px}
+  .live-activity:not(.activity-projected) .activity-vote-form{gap:10px;margin-bottom:11px;padding-bottom:11px}
+  .live-activity:not(.activity-projected) .activity-choices{gap:6px}
+  .live-activity:not(.activity-projected) .activity-choice{min-height:44px;box-sizing:border-box;padding:8px 10px;gap:9px;border-radius:10px;font-size:.86rem;line-height:1.25}
+  .live-activity:not(.activity-projected) .activity-choice input{width:17px;height:17px;flex-basis:17px}
+  .live-activity:not(.activity-projected) .activity-vote-form button{min-height:43px;padding:9px 14px;font-size:.86rem}
+  .live-activity:not(.activity-projected) .activity-results-heading{margin:8px 0 5px}
+  .live-activity:not(.activity-projected) .activity-response-count{margin:3px 0 10px;font-size:.8rem}
+  .live-activity:not(.activity-projected) .activity-response-count strong{font-size:1.12rem}
+  .live-activity:not(.activity-projected) .activity-bars{gap:10px}
+  .live-activity:not(.activity-projected) .activity-bar-label{font-size:.79rem;line-height:1.25;margin-bottom:4px}
+  .live-activity:not(.activity-projected) .activity-bar-track{height:10px}
+  .live-activity:not(.activity-projected) .activity-project-button{padding:6px 8px;font-size:.73rem}
+  .discussion-item-actions{flex-wrap:wrap}
+  .discussion-order-controls .discussion-move{width:40px;min-width:40px;min-height:40px}
+}
+
+
+/* v3.3.2 — detalhes dos encontros mais compactos no celular, mantendo alvos de toque */
+@media(max-width:650px){
+  #meetingDetail .meeting-collapse{margin-top:9px;border-radius:13px}
+  #meetingDetail .meeting-collapse>summary{padding:10px 12px;min-height:49px;font-size:.98rem;line-height:1.25}
+  #meetingDetail .meeting-collapse-title{gap:9px}
+  #meetingDetail .meeting-collapse-icon{width:29px;height:29px;flex-basis:29px}
+  #meetingDetail .meeting-collapse-icon svg{width:16px;height:16px}
+  #meetingDetail .meeting-collapse-content{padding:0 8px 8px}
+  #meetingDetail .meeting-collapse-content>.panel{padding:8px 5px 9px}
+  #meetingDetail .public-confirmed{min-height:49px;padding:5px 8px;gap:9px;border-radius:10px}
+  #meetingDetail .public-confirmed .member-avatar,
+  #meetingDetail .public-confirmed .member-avatar-button{width:39px!important;height:39px!important;min-width:39px!important;min-height:39px!important;flex-basis:39px!important}
+  #meetingDetail .confirmed-people{gap:5px}
+  #meetingDetail .attendance-heading p{margin-bottom:7px}
+  #meetingDetail .attendance-modes{padding:3px;gap:4px}
+  #meetingDetail .attendance-modes button{min-height:42px;padding:7px 5px}
+  #meetingDetail .attendance-tools{margin:9px 0}
+  #meetingDetail .attendance-rows{gap:5px}
+  #meetingDetail .attendance-person{min-height:52px;padding:7px 9px}
+  #meetingDetail .attendance-summary{margin-bottom:7px}
+  #meetingDetail .attendance-bulk{margin:8px 0;gap:7px}
+  #meetingDetail .discussion-panel h3{font-size:1.18rem;margin:3px 0 4px}
+  #meetingDetail .discussion-heading{gap:6px}
+  #meetingDetail .discussion-list{margin:9px 0;gap:9px;padding-left:22px}
+  #meetingDetail .discussion-item-actions{margin-top:5px;gap:5px}
+  #meetingDetail .discussion-form{margin-top:12px;padding-top:11px;gap:8px}
+  #meetingDetail .discussion-switch{padding:7px 0}
+  #meetingDetail .meeting-gallery{margin-top:0}
+  #meetingDetail .gallery-heading{margin-bottom:8px}
+  #meetingDetail .gallery-grid{gap:6px}
+  #meetingDetail .gallery-photo{border-radius:9px}
+  #meetingDetail .gallery-upload{margin-top:11px;padding-top:10px}
+  #meetingDetail .gallery-upload label{margin-bottom:6px}
+  #meetingDetail .gallery-upload .muted{margin:5px 0 8px}
+}
