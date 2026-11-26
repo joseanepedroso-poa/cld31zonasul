@@ -818,3 +818,8 @@ body.activity-projection-open{overflow:hidden}
     font-size:.65rem;line-height:1.12;text-align:left;white-space:nowrap;
   }
 }
+
+/* v3.3.8 — separador entre aniversariantes e leitoras */
+#tab-participantes .participants-list-heading{margin:17px 0 10px;padding:0 2px;align-items:center}
+#tab-participantes .participants-list-heading .eyebrow{font-size:.76rem;letter-spacing:.16em;color:#8c6074;font-weight:750;margin:0}
+@media(max-width:650px){#tab-participantes .participants-list-heading{margin:14px 0 9px}#tab-participantes .participants-list-heading .eyebrow{font-size:.74rem}}
